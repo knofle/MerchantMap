@@ -667,9 +667,30 @@ local function PinState(key, vendor)
 end
 
 -- Search results or all visited vendors (Vendors), plus unvisited (Unvisited Vendors) and hidden (Show hidden)
+-- /va unverified: only the vendors and service NPCs you still need to talk to
+local function UnverifiedNPCs()
+    local db = VA.db
+    local pinned = {}
+    for key, vendor in pairs(db.vendors) do
+        if vendor.unverified and not vendor.located then pinned[key] = true end
+    end
+    for key, npc in pairs(VA.services) do
+        if npc.unverified then pinned[key] = true end
+    end
+    for key in pairs(pinned) do
+        if db.hiddenVendors[key] and not db.showHidden then pinned[key] = nil end
+    end
+    return pinned
+end
+
 local function PinnedVendors()
     local db = VA.db
     local pinned = {}
+    if VA.verifyMode then
+        pinned = UnverifiedNPCs()
+        if VA.minimapKey and VA:GetNPC(VA.minimapKey) then pinned[VA.minimapKey] = true end
+        return pinned
+    end
     for key, ids in pairs(VA.activeVendors or {}) do pinned[key] = ids end
     for key, vendor in pairs(db.vendors) do
         local state = PinState(key, vendor)
@@ -743,8 +764,6 @@ local OPTIONS = {
       note = "Red pins use Classic data and turn into normal vendors once you open their shop." },
     { text = "Show hidden", setting = "showHidden", color = { 0.75, 0.75, 0.75 },
       note = "Grey pins are vendors you've hidden. Alt-click a pin to hide or enable it." },
-    { text = "Share verified data", note = "Export what you've verified, or import someone else's.",
-      action = function() VA:ToggleShare() end },
 }
 
 local MENU_W, OPTION_H = 190, 24
@@ -827,7 +846,7 @@ local function CreateMapMenu()
     -- Top right corner of the map
     local button = CreateFrame("Button", nil, WorldMapFrame)
     button:SetSize(52, 22)
-    button:SetPoint("TOPRIGHT", container, "TOPRIGHT", -4, -4)
+    button:SetPoint("TOPRIGHT", container, "TOPRIGHT", -4, -40)
     button:SetFrameLevel(container:GetFrameLevel() + 20)
     SolidBox(button, 0.9)
     local hl = button:CreateTexture()
@@ -857,7 +876,7 @@ local function CreateMapMenu()
     for i, option in ipairs(OPTIONS) do
         rows[i] = CreateMenuRow(menu, option, y)
         y = y - OPTION_H
-        if i == 1 or i == #OPTIONS - 1 then y = MenuLine(menu, y) end
+        if i == 1 then y = MenuLine(menu, y) end
     end
     menu:SetHeight(-y + 4)
 
@@ -977,7 +996,9 @@ function VA:ShowVendorTooltip(owner, key, stacked)
     end
     if vendor.title then GameTooltip:AddLine("<" .. vendor.title .. ">", 0.8, 0.8, 0.8) end
     GameTooltip:AddLine(self:LocationText(vendor), 0.8, 0.8, 0.8)
-    if vendor.unverified then
+    if vendor.unverified and vendor.located then
+        GameTooltip:AddLine("Location confirmed. Stock is from Classic and may have changed.", 1, 0.35, 0.3, true)
+    elseif vendor.unverified then
         GameTooltip:AddLine("Not visited yet. Stock is from Classic and may have changed.", 1, 0.35, 0.3, true)
     end
     GameTooltip:AddLine(" ")
@@ -1095,6 +1116,30 @@ function VA:ClosestServiceKey(keys)
     return ClosestNPC(keys)
 end
 
+-- NPCs skipped this session, when they're not where they should be
+VA.skipped = {}
+
+-- /va unverified: marks the nearest NPC you still need to talk to
+function VA:PointToNextUnverified()
+    if not self.verifyMode then return end
+    local keys = UnverifiedNPCs()
+    for key in pairs(self.skipped) do keys[key] = nil end
+    local key = ClosestNPC(keys)
+    if key then
+        self:SetMinimapVendor(self:GetNPC(key), key)
+    else
+        self:ClearMinimapVendor()
+        print("|cffccb084Vendor Atlas:|r no unverified NPCs left on this continent.")
+    end
+end
+
+-- Skips the marked NPC and points to the next one
+function VA:SkipUnverified()
+    if not (self.verifyMode and self.minimapKey) then return end
+    self.skipped[self.minimapKey] = true
+    self:PointToNextUnverified()
+end
+
 -- Opens your zone if a vendor there sells the item, otherwise the smallest map showing all its vendors.
 -- The closest vendor on your continent also goes on the minimap.
 -- If the click managed to target the closest vendor, it's right there, so the map stays closed.
@@ -1102,7 +1147,7 @@ end
 local function OpenMapAt(mapID)
     if WorldMapFrame:IsShown() then
         WorldMapFrame:SetMapID(mapID)
-    elseif not InCombatLockdown() then
+    elseif not VA.db.noAutoMap and not InCombatLockdown() then
         if OpenWorldMap then
             OpenWorldMap(mapID)
         else

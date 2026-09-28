@@ -158,6 +158,7 @@ end)
 function VA:ClearMinimapVendor()
     target, VA.minimapKey = nil, nil
     pin:Hide()
+    VA:SetArrowTarget(nil)
     VA:RefreshMap()
 end
 
@@ -176,6 +177,7 @@ function VA:SetMinimapVendor(vendor, key)
     end
     pin:Show()
     Update()
+    VA:SetArrowTarget(vendor)
     VA:RefreshMap()
 end
 

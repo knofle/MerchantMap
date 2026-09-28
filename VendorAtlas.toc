@@ -23,6 +23,8 @@ AutoCategories.lua
 Map.lua
 Pins.xml
 Minimap.lua
+Arrow.lua
 UI.lua
 MinimapButton.lua
 Share.lua
+Options.lua

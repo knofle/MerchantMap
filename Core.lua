@@ -139,6 +139,7 @@ function VA:ScanMerchant()
 
     local vendor = db.vendors[key]
     local seed = AdoptSeed(key, vendorName, ZoneOf(mapID))
+    local wasUnverified = seed or (vendor and vendor.unverified)
     if not vendor then
         vendor = seed or { items = {} }
     elseif seed then
@@ -148,7 +149,10 @@ function VA:ScanMerchant()
     db.vendors[key] = vendor
     vendor.name = vendorName
     vendor.lastSeen = time()
-    vendor.unverified, vendor.shipped = nil, nil
+    vendor.unverified, vendor.shipped, vendor.located = nil, nil, nil
+    -- A confirmed position for the Classic vendor isn't needed once you've seen the shop
+    db.verifiedServices[key] = nil
+    if vendor.seedID then db.verifiedServices[vendor.seedID] = nil end
 
     if pos then
         vendor.mapID, vendor.x, vendor.y = mapID, pos:GetXY()
@@ -208,6 +212,7 @@ function VA:ScanMerchant()
 
     scanIncomplete = not complete
     self:OnDataChanged()
+    if wasUnverified then self:PointToNextUnverified() end
 end
 
 local function QueueScan()

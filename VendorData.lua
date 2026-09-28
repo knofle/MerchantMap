@@ -1,6 +1,6 @@
 local _, VA = ...
 
--- Generated from Questie's classic NPC and item databases.
+-- Classic NPC and item data.
 -- Vendors: [npcID] = { name, title, friendlyTo ("A", "H", "AH"), areaID, x, y, { itemIDs sold } }  (x/y in 0-100)
 VA.knownVendors = {
 [54]={"Corina Steele","Weaponsmith","A",12,41.53,65.9,{2488,2489,2490,2491,2492,2493,2494,2495}},

@@ -1624,6 +1624,18 @@ SlashCmdList.VENDORATLAS = function(msg)
         print(("|cffccb084Vendor Atlas:|r targeting debug %s."):format(VA.debug and "on" or "off"))
     elseif msg == "minimap" then
         VA:SetMinimapButtonShown(true)
+    elseif msg == "unverified" then
+        VA.verifyMode = not VA.verifyMode or nil
+        VA:RefreshMap()
+        VA:PointToNextUnverified()
+        print(("|cffccb084Vendor Atlas:|r map shows %s."):format(
+            VA.verifyMode and "only NPCs you still need to talk to" or "your usual pins again"))
+    elseif msg == "next" then
+        VA:PointToNextUnverified()
+    elseif msg == "skip" then
+        VA:SkipUnverified()
+    elseif msg == "arrow" then
+        VA:ToggleArrow()
     elseif msg == "share" then
         VA:ToggleShare()
     elseif msg == "auto" then
