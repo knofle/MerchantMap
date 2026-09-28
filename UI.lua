@@ -1624,6 +1624,8 @@ SlashCmdList.VENDORATLAS = function(msg)
         print(("|cffccb084Vendor Atlas:|r targeting debug %s."):format(VA.debug and "on" or "off"))
     elseif msg == "minimap" then
         VA:SetMinimapButtonShown(true)
+    elseif msg == "share" then
+        VA:ToggleShare()
     elseif msg == "auto" then
         local count = VA:AutoCategorizeUncategorized()
         print(("|cffccb084Vendor Atlas:|r auto-categorizing %d uncategorized items."):format(count))

@@ -743,6 +743,8 @@ local OPTIONS = {
       note = "Red pins use Classic data and turn into normal vendors once you open their shop." },
     { text = "Show hidden", setting = "showHidden", color = { 0.75, 0.75, 0.75 },
       note = "Grey pins are vendors you've hidden. Alt-click a pin to hide or enable it." },
+    { text = "Share verified data", note = "Export what you've verified, or import someone else's.",
+      action = function() VA:ToggleShare() end },
 }
 
 local MENU_W, OPTION_H = 190, 24
@@ -855,7 +857,7 @@ local function CreateMapMenu()
     for i, option in ipairs(OPTIONS) do
         rows[i] = CreateMenuRow(menu, option, y)
         y = y - OPTION_H
-        if i == 1 then y = MenuLine(menu, y) end
+        if i == 1 or i == #OPTIONS - 1 then y = MenuLine(menu, y) end
     end
     menu:SetHeight(-y + 4)
 

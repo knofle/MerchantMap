@@ -109,6 +109,24 @@ function VA:ZoneOf(mapID)
     return ZoneOf(mapID)
 end
 
+-- Drops the Classic seed that stands for this vendor when Forever's ID differs (used by imports)
+function VA:RemoveSeedFor(key, name, mapID)
+    local zone = ZoneOf(mapID)
+    for seedID, seed in pairs(db.vendors) do
+        if seedID ~= key and seed.unverified and seed.name == name and (not seed.mapID or seed.mapID == zone) then
+            for itemID in pairs(seed.items) do
+                local item = db.items[itemID]
+                if item then
+                    item.vendors[seedID] = nil
+                    if not next(item.vendors) then db.items[itemID] = nil end
+                end
+            end
+            db.vendors[seedID] = nil
+            return seedID
+        end
+    end
+end
+
 -- Scanning --------------------------------------------------------------
 
 function VA:ScanMerchant()
