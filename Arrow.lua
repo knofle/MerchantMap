@@ -28,12 +28,19 @@ name:SetPoint("TOP", frame, "BOTTOM", 0, -2)
 local distance = frame:CreateFontString(nil, "OVERLAY", "VA_GameFontDisableSmall")
 distance:SetPoint("TOP", name, "BOTTOM", 0, -1)
 
+local continents = {}
 local function Continent(mapID)
-    local info = mapID and C_Map.GetMapInfo(mapID)
-    while info and info.mapType > Enum.UIMapType.Continent and info.parentMapID and info.parentMapID ~= 0 do
-        info = C_Map.GetMapInfo(info.parentMapID)
+    if not mapID then return end
+    local found = continents[mapID]
+    if found == nil then
+        local info = C_Map.GetMapInfo(mapID)
+        while info and info.mapType > Enum.UIMapType.Continent and info.parentMapID and info.parentMapID ~= 0 do
+            info = C_Map.GetMapInfo(info.parentMapID)
+        end
+        found = info and info.mapType == Enum.UIMapType.Continent and info.mapID or false
+        continents[mapID] = found
     end
-    return info and info.mapType == Enum.UIMapType.Continent and info.mapID
+    return found or nil
 end
 
 -- Green when facing the vendor, turning red as it falls behind you
@@ -85,36 +92,65 @@ local function Update(_, dt)
 end
 
 frame:SetScript("OnUpdate", Update)
-frame:SetScript("OnDragStart", frame.StartMoving)
-frame:SetScript("OnDragStop", function(self)
-    self:StopMovingOrSizing()
-    local point, _, relPoint, x, y = self:GetPoint()
+
+local function StartMoving() frame:StartMoving() end
+local function StopMoving()
+    frame:StopMovingOrSizing()
+    local point, _, relPoint, x, y = frame:GetPoint()
     VA.db.arrowPoint = { point, relPoint, x, y }
-end)
--- While verifying (/va unverified), left-click finds the nearest NPC from where you are now,
--- and right-click skips to the next one instead of clearing the marker
-frame:SetScript("OnClick", function(_, button)
+end
+frame:SetScript("OnDragStart", StartMoving)
+frame:SetScript("OnDragStop", StopMoving)
+
+-- Left-click targets and skulls the NPC (through the targeting button). While verifying
+-- (/va unverified), shift-click finds the nearest from where you are and right-click skips one;
+-- otherwise right-click clears the marker.
+local function OnClick(_, button)
     if button == "LeftButton" then
-        VA:PointToNextUnverified()
+        if VA.verifyMode and IsShiftKeyDown() then VA:PointToNextUnverified() end
     elseif VA.verifyMode then
         VA:SkipUnverified()
     else
         VA:ClearMinimapVendor()
     end
-end)
-frame:SetScript("OnEnter", function(self)
+end
+frame:SetScript("OnClick", OnClick)
+
+local function ShowTooltip(self)
     GameTooltip:SetOwner(self, "ANCHOR_TOP")
     GameTooltip:AddLine(target and target.name or "Vendor Atlas", 1, 1, 1)
+    GameTooltip:AddLine("Click to target and mark with a skull (when nearby)", 0.5, 0.5, 0.5)
     GameTooltip:AddLine("Drag to move", 0.5, 0.5, 0.5)
     if VA.verifyMode then
-        GameTooltip:AddLine("Click to find the nearest from where you are", 0.35, 0.85, 0.35)
+        GameTooltip:AddLine("Shift-click to find the nearest from where you are", 0.35, 0.85, 0.35)
         GameTooltip:AddLine("Right-click to skip to the next one", 0.35, 0.85, 0.35)
     else
         GameTooltip:AddLine("Right-click to remove the marker", 0.35, 0.85, 0.35)
     end
     GameTooltip:Show()
+end
+
+local function AttachTargeting()
+    if not target then return end
+    VA:AttachTargetButton(frame, {
+        name = target.name,
+        unmarkName = target.name,
+        rightClick = true,
+        onEnter = ShowTooltip,
+        onLeave = GameTooltip_Hide,
+        onClick = OnClick,
+        onDragStart = StartMoving,
+        onDragStop = StopMoving,
+    })
+end
+
+frame:SetScript("OnEnter", function(self)
+    ShowTooltip(self)
+    AttachTargeting()
 end)
-frame:SetScript("OnLeave", GameTooltip_Hide)
+frame:SetScript("OnLeave", function(self)
+    if not VA:IsTargetOwner(self) then GameTooltip:Hide() end
+end)
 
 -- Called by the minimap marker; nil hides the arrow
 function VA:SetArrowTarget(vendor)
@@ -123,6 +159,11 @@ function VA:SetArrowTarget(vendor)
         name:SetText(vendor.name)
         elapsed = INTERVAL
         frame:Show()
+        -- Still under the cursor after skipping: aim the targeting at the new NPC
+        if self:IsTargetOwner(frame) then
+            AttachTargeting()
+            ShowTooltip(frame)
+        end
     else
         frame:Hide()
     end

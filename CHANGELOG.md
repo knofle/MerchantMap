@@ -1,9 +1,7 @@
 # Vendor Atlas
 
-## [1](https://github.com/knofle/VendorAtlas/tree/1) (2026-09-25)
-[Full Changelog](https://github.com/knofle/VendorAtlas/commits/1) [Previous Releases](https://github.com/knofle/VendorAtlas/releases)
+## [2](https://github.com/knofle/VendorAtlas/tree/2) (2026-09-28)
+[Full Changelog](https://github.com/knofle/VendorAtlas/compare/1...2) [Previous Releases](https://github.com/knofle/VendorAtlas/releases)
 
-- Update VendorAtlas.toc  
-- Create .pkgmeta  
-- Create release.yml  
+- Add files via upload  
 - Add files via upload  

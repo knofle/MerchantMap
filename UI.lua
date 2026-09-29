@@ -580,6 +580,7 @@ local SERVICE_WORDS = {
     ["Services/Battlemasters"] = "battleground bg pvp",
     ["Services/Guild Masters"] = "guild tabard charter",
     ["Services/Stable Masters"] = "stable pet",
+    ["Services/Transmogrifiers"] = "transmog tmog xmog",
 }
 
 local function IsService(id)
@@ -1069,6 +1070,7 @@ end
 local dataTimer
 function VA:OnDataChanged()
     MarkDirty()
+    servicePaths = nil -- a newly found NPC can bring a new Services category
     wipe(lowerNames)
     if dataTimer then return end
     dataTimer = C_Timer.NewTimer(0.25, function()

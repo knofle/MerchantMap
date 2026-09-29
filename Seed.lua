@@ -35,6 +35,7 @@ local SERVICE_ICONS = {
     ["Battlemasters"] = "Interface\\Minimap\\Tracking\\BattleMaster",
     ["Guild Masters"] = "Interface\\Minimap\\Tracking\\Banker",
     ["Repair"] = "Interface\\Minimap\\Tracking\\Repair",
+    ["Transmogrifiers"] = "Interface\\Minimap\\Tracking\\Transmogrifier",
 }
 
 local function ServiceIcon(path)
@@ -63,10 +64,14 @@ end
 
 -- Confirmed NPC positions, from talking to them: yours (db.verifiedServices) or shipped, whichever is newer.
 -- Keyed "s" .. npcID for service NPCs and by Classic NPC ID for vendors whose shop you couldn't open.
+-- New service NPCs that aren't in the Classic data also carry their paths and faction.
 local function ConfirmedSpot(key)
     local seen, shipped = VA.db.verifiedServices[key], VA.shippedServices[key]
     if shipped and (not seen or seen.t < shipped[5]) then
-        seen = { name = shipped[1], mapID = shipped[2], x = shipped[3], y = shipped[4], t = shipped[5] }
+        seen = {
+            name = shipped[1], mapID = shipped[2], x = shipped[3], y = shipped[4], t = shipped[5],
+            paths = shipped[6], faction = shipped[7], title = shipped[8],
+        }
     end
     return seen
 end
@@ -90,6 +95,108 @@ function VA:RefreshServices()
             if npc.mapID then self.services[key] = npc end
         end
     end
+
+    -- New NPCs found in Forever
+    local new = {}
+    for key in pairs(self.db.verifiedServices) do new[key] = true end
+    for key in pairs(self.shippedServices) do new[key] = true end
+    for key in pairs(new) do
+        local seen = not self.services[key] and ConfirmedSpot(key)
+        if seen and seen.paths and (seen.faction or "AH"):find(faction, 1, true) then
+            self.services[key] = {
+                name = seen.name, title = seen.title, paths = seen.paths, icon = ServiceIcon(seen.paths[1]), service = true,
+                mapID = seen.mapID, x = seen.x, y = seen.y, verifiedAt = seen.t, faction = seen.faction,
+            }
+        end
+    end
+end
+
+-- What an NPC that isn't in the Classic data offers, from the window they opened
+local NEW_SERVICE_EVENTS = {
+    BATTLEFIELDS_SHOW = "Services/Battlemasters",
+    TAXIMAP_OPENED = "Services/Flight Masters",
+    BANKFRAME_OPENED = "Services/Bankers",
+    AUCTION_HOUSE_SHOW = "Services/Auctioneers",
+    PET_STABLE_SHOW = "Services/Stable Masters",
+    GUILD_REGISTRAR_SHOW = "Services/Guild Masters",
+    TRANSMOGRIFY_OPEN = "Services/Transmogrifiers",
+}
+local NEW_SERVICE_TYPES = {
+    BattleMaster = "Services/Battlemasters", TaxiNode = "Services/Flight Masters", Banker = "Services/Bankers",
+    Auctioneer = "Services/Auctioneers", StableMaster = "Services/Stable Masters", Binder = "Services/Innkeepers",
+    Transmogrifier = "Services/Transmogrifiers",
+}
+
+-- Or from their title, like <Darkspear Islands Battlemaster> or <Hunter Trainer>
+local TITLE_PATHS = {
+    { "battlemaster", "Services/Battlemasters" },
+    { "flight master", "Services/Flight Masters" }, { "gryphon master", "Services/Flight Masters" },
+    { "wind rider master", "Services/Flight Masters" }, { "hippogryph master", "Services/Flight Masters" },
+    { "bat handler", "Services/Flight Masters" },
+    { "innkeeper", "Services/Innkeepers" }, { "banker", "Services/Bankers" },
+    { "auctioneer", "Services/Auctioneers" }, { "stable master", "Services/Stable Masters" },
+    { "guild master", "Services/Guild Masters" }, { "weapon master", "Services/Trainers/Weapon Masters" },
+    { "pet trainer", "Services/Trainers/Pet" }, { "riding", "Services/Trainers/Riding" },
+    { "transmogrifier", "Services/Transmogrifiers" },
+}
+local CLASSES = { "Warrior", "Paladin", "Hunter", "Rogue", "Priest", "Shaman", "Mage", "Warlock", "Druid" }
+local PROFESSIONS = {
+    "Alchemy", "Blacksmithing", "Cooking", "Enchanting", "Engineering", "First Aid", "Fishing",
+    "Herbalism", "Leatherworking", "Mining", "Skinning", "Tailoring",
+}
+
+-- Profession trainers titled by rank, like <Journeyman Enchanter> or <Expert Tailor>
+local RANKS = { apprentice = true, journeyman = true, expert = true, artisan = true, master = true, ["grand master"] = true }
+local CRAFTERS = {
+    alchemist = "Alchemy", blacksmith = "Blacksmithing", armorsmith = "Blacksmithing", weaponsmith = "Blacksmithing",
+    enchanter = "Enchanting", engineer = "Engineering", cook = "Cooking", chef = "Cooking",
+    fisherman = "Fishing", herbalist = "Herbalism", leatherworker = "Leatherworking", miner = "Mining",
+    skinner = "Skinning", tailor = "Tailoring", physician = "First Aid",
+}
+
+local function RankedTrainer(lower)
+    local rank, crafter = lower:match("^(grand master) (%a+)$")
+    if not rank then rank, crafter = lower:match("^(%a+) (%a+)$") end
+    local profession = rank and RANKS[rank] and CRAFTERS[crafter]
+    return profession and "Services/Trainers/Professions/" .. profession
+end
+
+local function UnitTitle(unit)
+    local data = C_TooltipInfo and C_TooltipInfo.GetUnit(unit)
+    local line = data and data.lines and data.lines[2]
+    local text = line and line.leftText
+    if not text or (issecretvalue and issecretvalue(text)) or text:find("^Level") then return end
+    return text
+end
+
+local function TitlePath(unit)
+    local title = UnitTitle(unit)
+    if not title then return end
+    local lower = strlower(title)
+    local ranked = RankedTrainer(lower)
+    if ranked then return ranked end
+    for _, rule in ipairs(TITLE_PATHS) do
+        if lower:find(rule[1], 1, true) then return rule[2] end
+    end
+    if lower:find("trainer", 1, true) then
+        for _, class in ipairs(CLASSES) do
+            if lower:find(strlower(class), 1, true) then return "Services/Trainers/Classes/" .. class end
+        end
+        for _, profession in ipairs(PROFESSIONS) do
+            if lower:find(strlower(profession), 1, true) then return "Services/Trainers/Professions/" .. profession end
+        end
+        return "Services/Trainers/Other"
+    end
+end
+
+local function NewServicePath(unit, event, kind)
+    if NEW_SERVICE_EVENTS[event] then return NEW_SERVICE_EVENTS[event] end
+    if event == "PLAYER_INTERACTION_MANAGER_FRAME_SHOW" and Enum.PlayerInteractionType then
+        for name, path in pairs(NEW_SERVICE_TYPES) do
+            if Enum.PlayerInteractionType[name] == kind then return path end
+        end
+    end
+    return TitlePath(unit)
 end
 
 -- Finds the NPC by key, or by name in the same zone when Forever's ID differs from Classic's
@@ -108,7 +215,7 @@ local function IsClassicSeed(vendor) return vendor.unverified end
 -- Talking to an NPC (or opening their trainer, flight map, bank...) confirms where they stand.
 -- Service NPCs become verified; Classic vendors whose shop you can't open get their position updated,
 -- while their stock stays unverified until you do.
-local function ConfirmNPC(unit)
+local function ConfirmNPC(unit, event, kind)
     local name = UnitName(unit)
     if not name or (issecretvalue and issecretvalue(name)) then return end
     local mapID = C_Map.GetBestMapForUnit("player")
@@ -127,9 +234,24 @@ local function ConfirmNPC(unit)
 
     local key, npc = FindNPC(VA.services, npcID and "s" .. npcID, name, zone)
     if npc then
-        VA.db.verifiedServices[key] = { name = name, mapID = mapID, x = x, y = y, t = now }
+        -- New NPCs keep what they offer, since the Classic data can't supply it
+        local isNew = not VA.knownServices[tonumber(key:sub(2))]
+        VA.db.verifiedServices[key] = {
+            name = name, mapID = mapID, x = x, y = y, t = now,
+            paths = isNew and npc.paths or nil, faction = isNew and npc.faction or nil, title = isNew and npc.title or nil,
+        }
         changed = npc.unverified
         npc.name, npc.mapID, npc.x, npc.y, npc.unverified, npc.verifiedAt = name, mapID, x, y, nil, now
+    elseif npcID and NewServicePath(unit, event, kind) then
+        -- A service NPC the Classic data doesn't have
+        local side = UnitFactionGroup(unit)
+        VA.db.verifiedServices["s" .. npcID] = {
+            name = name, mapID = mapID, x = x, y = y, t = now, paths = { NewServicePath(unit, event, kind) },
+            title = UnitTitle(unit),
+            faction = side == "Horde" and "H" or side == "Alliance" and "A" or "AH",
+        }
+        VA:RefreshServices()
+        changed = true
     end
 
     key, npc = FindNPC(VA.db.vendors, npcID, name, zone, IsClassicSeed)
@@ -149,12 +271,12 @@ local verifyEvents = CreateFrame("Frame")
 for _, event in ipairs({
     "GOSSIP_SHOW", "TRAINER_SHOW", "TAXIMAP_OPENED", "BANKFRAME_OPENED", "AUCTION_HOUSE_SHOW",
     "PET_STABLE_SHOW", "BATTLEFIELDS_SHOW", "GUILD_REGISTRAR_SHOW", "MERCHANT_SHOW",
-    "PLAYER_INTERACTION_MANAGER_FRAME_SHOW",
+    "PLAYER_INTERACTION_MANAGER_FRAME_SHOW", "TRANSMOGRIFY_OPEN",
 }) do
     -- Not every client has every event
     pcall(verifyEvents.RegisterEvent, verifyEvents, event)
 end
-verifyEvents:SetScript("OnEvent", function() ConfirmNPC("npc") end)
+verifyEvents:SetScript("OnEvent", function(_, event, kind) ConfirmNPC("npc", event, kind) end)
 
 -- Some NPCs won't talk to you at all (stable masters to non-hunters), so targeting one
 -- within about 10 yards confirms them too. Walking up to a target from afar counts.

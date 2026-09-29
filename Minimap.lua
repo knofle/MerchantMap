@@ -5,7 +5,6 @@ local _, VA = ...
 
 local CIRCLE = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local COIN = "Interface\\MoneyFrame\\UI-GoldIcon"
-local INTERVAL = 0.05
 
 -- Minimap diameter in yards per zoom level
 local SIZES = {
@@ -74,7 +73,29 @@ local function Offset()
 end
 
 -- Minimap settings, refreshed when they can change rather than every update
-local rotate, square
+local rotate, square, indoors
+
+-- The minimap's own indoor mode, which IsIndoors() doesn't always match (towns, buildings, caves).
+-- Indoor and outdoor zoom are stored separately, so whichever matches the current zoom is in use;
+-- when both are equal, nudge the zoom for a moment to tell them apart.
+-- canNudge is only set on zone changes: the nudge fires zoom events itself, so doing it on
+-- those would keep retriggering
+local function ReadIndoors(canNudge)
+    local outdoorZoom, insideZoom = GetCVar("minimapZoom"), GetCVar("minimapInsideZoom")
+    if not (outdoorZoom and insideZoom) then
+        indoors = IsIndoors()
+        return
+    end
+    local zoom = Minimap:GetZoom()
+    if outdoorZoom ~= insideZoom then
+        indoors = tonumber(outdoorZoom) ~= zoom
+    elseif canNudge then
+        Minimap:SetZoom(zoom < 2 and zoom + 1 or zoom - 1)
+        indoors = tonumber(GetCVar("minimapZoom")) ~= Minimap:GetZoom()
+        Minimap:SetZoom(zoom)
+    end
+end
+
 local function ReadSettings()
     rotate = GetCVar("rotateMinimap") == "1"
     square = GetMinimapShape and GetMinimapShape() == "SQUARE"
@@ -90,7 +111,7 @@ local function Update()
     end
 
     local zoom = Minimap:GetZoom()
-    local diameter = SIZES[IsIndoors() and "indoor" or "outdoor"][zoom + 1] or SIZES.outdoor[1]
+    local diameter = SIZES[indoors and "indoor" or "outdoor"][zoom + 1] or SIZES.outdoor[1]
     local scale = Minimap:GetWidth() / diameter
     local x, y = east * scale, -south * scale
 
@@ -120,13 +141,8 @@ local function Update()
     pin:SetPoint("CENTER", Minimap, "CENTER", x, y)
 end
 
-local elapsed = 0
-pin:SetScript("OnUpdate", function(_, dt)
-    elapsed = elapsed + dt
-    if elapsed < INTERVAL then return end
-    elapsed = 0
-    Update()
-end)
+-- Every frame, so the pin moves with the minimap instead of trailing it
+pin:SetScript("OnUpdate", Update)
 
 local function ShowTooltip(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
@@ -169,6 +185,7 @@ function VA:SetMinimapVendor(vendor, key)
     target, VA.minimapKey = vendor, key
     wipe(cached)
     ReadSettings()
+    ReadIndoors(true)
     icon:SetTexture(vendor.icon or COIN)
     if vendor.unverified then
         ring:SetVertexColor(0.9, 0.15, 0.1)
@@ -185,9 +202,15 @@ end
 local events = CreateFrame("Frame")
 events:RegisterEvent("MERCHANT_SHOW")
 events:RegisterEvent("CVAR_UPDATE")
+-- The minimap switches between indoor and outdoor zoom on these
+for _, event in ipairs({ "MINIMAP_UPDATE_ZOOM", "ZONE_CHANGED", "ZONE_CHANGED_INDOORS", "ZONE_CHANGED_NEW_AREA" }) do
+    events:RegisterEvent(event)
+end
 events:SetScript("OnEvent", function(_, event)
     if event == "CVAR_UPDATE" then
         ReadSettings()
+    elseif event ~= "MERCHANT_SHOW" then
+        if target then ReadIndoors(event ~= "MINIMAP_UPDATE_ZOOM") end
     elseif target and UnitName("npc") == target.name then
         VA:ClearMinimapVendor()
     end

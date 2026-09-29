@@ -49,7 +49,10 @@ function VA:ExportData()
     for key, seen in pairs(db.verifiedServices) do
         local shipped = self.shippedServices[key]
         if not shipped or (seen.t or 0) > shipped[5] then
-            data.services[key] = { name = seen.name, mapID = seen.mapID, x = NZ(seen.x), y = NZ(seen.y), t = NZ(seen.t) }
+            data.services[key] = {
+                name = seen.name, mapID = seen.mapID, x = NZ(seen.x), y = NZ(seen.y), t = NZ(seen.t),
+                paths = seen.paths, faction = seen.faction, title = seen.title,
+            }
             serviceCount = serviceCount + 1
         end
     end
