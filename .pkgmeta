@@ -1,4 +1,4 @@
-package-as: VendorAtlas
+package-as: MerchantMap
 externals:
   Libs/LibStub:
     url: https://repos.curseforge.com/wow/libstub/trunk
@@ -14,4 +14,4 @@ externals:
     url: https://github.com/SafeteeWoW/LibDeflate.git
 
 move-folders:
- VendorAtlas/VendorAtlas: VendorAtlas
+ MerchantMap/MerchantMap: MerchantMap
