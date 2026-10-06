@@ -171,11 +171,24 @@ pin:SetScript("OnLeave", function(self)
     if not VA:IsTargetOwner(self) then GameTooltip:Hide() end
 end)
 
+-- Set when the waypoint option placed a waypoint, so clearing the marker can take it away again
+local placedWaypoint
+
 function VA:ClearMinimapVendor()
     target, VA.minimapKey = nil, nil
     pin:Hide()
+    if placedWaypoint then
+        placedWaypoint = nil
+        C_Map.ClearUserWaypoint()
+    end
     VA:SetArrowTarget(nil)
     VA:RefreshMap()
+end
+
+-- Option: the marked vendor can be left off the minimap; the arrow and world map still show it
+function VA:SetMinimapPinShown(show)
+    self.db.noMinimapPin = not show or nil
+    pin:SetShown(show and target ~= nil)
 end
 
 pin:SetScript("OnClick", function() VA:ClearMinimapVendor() end)
@@ -192,8 +205,13 @@ function VA:SetMinimapVendor(vendor, key)
     else
         ring:SetVertexColor(0.85, 0.68, 0.2)
     end
-    pin:Show()
+    pin:SetShown(not VA.db.noMinimapPin)
     Update()
+    -- Option: a map waypoint on the vendor too
+    if VA.db.autoWaypoint then
+        VA:SetWaypoint(vendor)
+        placedWaypoint = true
+    end
     VA:SetArrowTarget(vendor)
     VA:RefreshMap()
 end

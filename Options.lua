@@ -56,12 +56,17 @@ local function Check(text, note, get, set, y)
     hint:SetPoint("LEFT", label, "RIGHT", 10, 0)
     hint:SetText(note)
 
-    function row:Update() fill:SetShown(get()) end
+    row.label = label
+    function row:Update()
+        fill:SetShown(get())
+        if self.OnUpdate then self:OnUpdate(get()) end
+    end
     row:SetScript("OnClick", function(self)
         set(not get())
         self:Update()
     end)
     checks[#checks + 1] = row
+    return row
 end
 
 Check("Direction arrow", "Points to the marked vendor",
@@ -122,6 +127,14 @@ Check("Minimap button", "Left-click opens Vendor Atlas",
     function() return not (VA.db.minimapButton and VA.db.minimapButton.hide) end,
     function(on) VA:SetMinimapButtonShown(on) end, -160)
 
+Check("Minimap marker", "Shows the vendor you click on the minimap",
+    function() return not VA.db.noMinimapPin end,
+    function(on) VA:SetMinimapPinShown(on) end, -186)
+
+Check("Waypoint", "Sets a map waypoint on the vendor you click",
+    function() return VA.db.autoWaypoint end,
+    function(on) VA.db.autoWaypoint = on or nil end, -212)
+
 -- Raid marker dropdown
 local MARKERS = { "Star", "Circle", "Diamond", "Triangle", "Moon", "Square", "Cross", "Skull" }
 local function MarkerIcon(i) return "Interface\\TargetingFrame\\UI-RaidTargetingIcon_" .. i end
@@ -136,13 +149,15 @@ local function Box(frame, color)
     fill:SetColorTexture(color[1], color[2], color[3], 1)
 end
 
-local markerLabel = panel:CreateFontString(nil, "OVERLAY", "VA_GameFontHighlight")
-markerLabel:SetPoint("TOPLEFT", 16, -192)
-markerLabel:SetText("Target marker")
+-- Checkbox turns raid markers on or off; the dropdown picks which one
+local markerCheck = Check("Target marker", "",
+    function() return not VA.db.noRaidMarker end,
+    function(on) VA:SetRaidMarkerEnabled(on) end, -244)
+markerCheck:SetWidth(120)
 
 local dropdown = CreateFrame("Button", nil, panel)
 dropdown:SetSize(130, 22)
-dropdown:SetPoint("LEFT", markerLabel, "RIGHT", 12, 0)
+dropdown:SetPoint("LEFT", markerCheck.label, "RIGHT", 12, 0)
 Box(dropdown, C.buttonTop)
 local ddHl = dropdown:CreateTexture()
 ddHl:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.12)
@@ -209,9 +224,17 @@ list:SetScript("OnEvent", function(self)
 end)
 dropdown:SetScript("OnClick", function() list:SetShown(not list:IsShown()) end)
 
+-- Dropdown is dimmed while markers are off
+function markerCheck:OnUpdate(on)
+    dropdown:SetEnabled(on)
+    dropdown:SetAlpha(on and 1 or 0.4)
+    markerNote:SetAlpha(on and 1 or 0.4)
+    if not on then list:Hide() end
+end
+
 local share = CreateFrame("Button", nil, panel)
 share:SetSize(170, 22)
-share:SetPoint("TOPLEFT", 16, -224)
+share:SetPoint("TOPLEFT", 16, -276)
 local border = share:CreateTexture(nil, "BACKGROUND")
 border:SetAllPoints()
 border:SetColorTexture(BORDER[1], BORDER[2], BORDER[3], 1)
@@ -231,7 +254,7 @@ shareNote:SetPoint("LEFT", share, "RIGHT", 10, 0)
 shareNote:SetText("Export what you've verified, or import someone else's")
 
 local help = panel:CreateFontString(nil, "OVERLAY", "VA_GameFontHighlightSmall")
-help:SetPoint("TOPLEFT", 16, -262)
+help:SetPoint("TOPLEFT", 16, -314)
 help:SetPoint("RIGHT", -16, 0)
 help:SetJustifyH("LEFT")
 help:SetSpacing(2)

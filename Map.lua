@@ -247,7 +247,8 @@ end
 -- leaves some other unit targeted or marked.
 local function TargetMacro(name)
     local macro = "/cleartarget\n/targetexact " .. name
-    if lastMarked == name then return macro end
+    -- Option: target only, without a raid marker
+    if lastMarked == name or VA.db.noRaidMarker then return macro end
     macro = macro .. "\n/tm [@target,exists] " .. (VA.db.raidMarker or 8)
     if lastMarked then
         macro = macro .. "\n/stopmacro [@target,exists]\n/targetexact " .. lastMarked
@@ -319,7 +320,7 @@ local function TargetButton()
         Debug("click", button, down and "down" or "up", "shown macro:", ((self:GetAttribute("macrotext") or ""):gsub("\n", " | ")))
         if down then return end
         if button == "LeftButton" and self.targetName and self.targetName ~= lastMarked
-            and not (IsShiftKeyDown() or IsAltKeyDown() or IsControlKeyDown()) then
+            and not VA.db.noRaidMarker and not (IsShiftKeyDown() or IsAltKeyDown() or IsControlKeyDown()) then
             RememberMark(self.targetName)
         end
         local opts = self.opts
@@ -959,6 +960,13 @@ end
 -- since the vendor marked so far still has the old icon.
 function VA:SetRaidMarker(index)
     self.db.raidMarker = index ~= 8 and index or nil
+    lastMarked = nil
+    if targetButton and targetButton:IsShown() and not InCombatLockdown() then AimButton(targetButton) end
+end
+
+-- Option: target the vendor without putting a raid marker on them
+function VA:SetRaidMarkerEnabled(on)
+    self.db.noRaidMarker = not on or nil
     lastMarked = nil
     if targetButton and targetButton:IsShown() and not InCombatLockdown() then AimButton(targetButton) end
 end
