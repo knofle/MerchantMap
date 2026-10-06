@@ -1,6 +1,6 @@
-local _, VA = ...
+local _, MM = ...
 
-VA.ALL, VA.UNCAT = "__all", "__uncat"
+MM.ALL, MM.UNCAT = "__all", "__uncat"
 
 local DEFAULTS = {
     "Consumables/Food & Drink",
@@ -15,16 +15,16 @@ local function IsUnder(path, root)
     return path == root or path:sub(1, #root + 1) == root .. "/"
 end
 
-function VA:ParentPath(path)
+function MM:ParentPath(path)
     return path:match("^(.*)/[^/]+$")
 end
 
-function VA:IsCategory(path)
+function MM:IsCategory(path)
     return path ~= self.ALL and path ~= self.UNCAT
 end
 
 -- " Professions//Tailoring " -> "Professions/Tailoring"
-function VA:NormalizePath(text)
+function MM:NormalizePath(text)
     local parts = {}
     for part in text:gmatch("[^/]+") do
         part = strtrim(part)
@@ -45,7 +45,7 @@ local function Remap(set, old, new)
     end
 end
 
-function VA:InitCategories()
+function MM:InitCategories()
     local db = self.db
     db.itemCats = db.itemCats or {}
     db.collapsed = db.collapsed or {}
@@ -75,7 +75,7 @@ function VA:InitCategories()
     end
 end
 
-function VA:AddCategory(text)
+function MM:AddCategory(text)
     local path = self:NormalizePath(text)
     if not path then return end
     local db = self.db
@@ -92,7 +92,7 @@ function VA:AddCategory(text)
     return path
 end
 
-function VA:HasChildren(path)
+function MM:HasChildren(path)
     local prefix = path .. "/"
     for other in pairs(self.db.categories) do
         if other:sub(1, #prefix) == prefix then return true end
@@ -100,7 +100,7 @@ function VA:HasChildren(path)
     return false
 end
 
-function VA:RenameCategory(old, text)
+function MM:RenameCategory(old, text)
     local new = self:NormalizePath(text)
     if not new or new == old or IsUnder(new, old) then return end
     local db = self.db
@@ -111,7 +111,7 @@ function VA:RenameCategory(old, text)
     return new
 end
 
-function VA:DeleteCategory(path)
+function MM:DeleteCategory(path)
     local db = self.db
     Remap(db.categories, path)
     Remap(db.collapsed, path)
@@ -121,21 +121,21 @@ function VA:DeleteCategory(path)
     end
 end
 
-function VA:AssignItem(itemID, path)
+function MM:AssignItem(itemID, path)
     local set = self.db.itemCats[itemID] or {}
     self.db.itemCats[itemID] = set
     set[path] = true
 end
 
 -- Removes the item from root and all of its subcategories
-function VA:UnassignItem(itemID, root)
+function MM:UnassignItem(itemID, root)
     local set = self.db.itemCats[itemID]
     if not set then return end
     Remap(set, root)
     if not next(set) then self.db.itemCats[itemID] = nil end
 end
 
-function VA:ItemInCategory(itemID, root)
+function MM:ItemInCategory(itemID, root)
     local set = self.db.itemCats[itemID]
     if root == self.ALL then return true end
     if root == self.UNCAT then return not set end

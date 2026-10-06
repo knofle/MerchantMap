@@ -1,32 +1,32 @@
-local _, VA = ...
+local _, MM = ...
 
 -- Page under Options > AddOns: a few toggles, the share screen, and a short guide.
 
-local C = VA.COLORS
+local C = MM.COLORS
 local ACCENT, BORDER = C.accent, C.border
 
 local HELP = [[
 |cffccb084Recording|r
-Open a vendor's shop and Vendor Atlas records what they sell and where they stand. Talking to trainers, flight masters and other service NPCs records them too. For NPCs that won't talk to you, target them within 10 yards.
+Open a vendor's shop and Merchant Map records what they sell and where they stand. Talking to trainers, flight masters and other service NPCs records them too. For NPCs that won't talk to you, target them within 10 yards.
 
 |cffccb084Searching|r
-Open the window with |cffffffff/va|r or the minimap button, or search straight from chat with |cffffffff/va hunter trainer|r. Search by name, category or shorthand ("tailoring mats", "lw recipes"), by level ("food 10-20", "45", "over 30") or for services ("hunter trainer", "repair"). Drag items onto categories to sort them, right-click to remove them.
+Open the window with |cffffffff/mm|r or the minimap button, or search straight from chat with |cffffffff/mm hunter trainer|r. Search by name, category or shorthand ("tailoring mats", "lw recipes"), by level ("food 10-20", "45", "over 30") or for services ("hunter trainer", "repair"). Drag items onto categories to sort them, right-click to remove them.
 
 |cffccb084Finding a vendor|r
-Click an item to target the closest vendor and put a raid marker on them, show them on the minimap and point the arrow at them. Shift-click a map pin for a waypoint, alt-click to hide it. The VA button on the world map picks which pins show.
+Click an item to target the closest vendor and put a raid marker on them, show them on the minimap and point the arrow at them. Shift-click a map pin for a waypoint, alt-click to hide it. The MM button on the world map picks which pins show.
 
 |cffccb084Verifying|r
 Red pins are Classic data that hasn't been confirmed in Forever. Visit or talk to them to confirm.
 
 |cffccb084Commands|r
-|cffffffff/va|r  |cffffffff/va <search>|r  |cffffffff/va arrow|r  |cffffffff/va share|r  |cffffffff/va auto|r  |cffffffff/va minimap|r]]
+|cffffffff/mm|r  |cffffffff/mm <search>|r  |cffffffff/mm arrow|r  |cffffffff/mm share|r  |cffffffff/mm auto|r  |cffffffff/mm minimap|r]]
 
 local panel = CreateFrame("Frame")
 panel:Hide()
 
-local title = panel:CreateFontString(nil, "OVERLAY", "VA_GameFontNormalLarge")
+local title = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontNormalLarge")
 title:SetPoint("TOPLEFT", 16, -16)
-title:SetText("Vendor Atlas")
+title:SetText("Merchant Map")
 title:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
 
 -- Checkbox in the addon's style: bordered square, filled when on
@@ -49,10 +49,10 @@ local function Check(text, note, get, set, y)
     fill:SetPoint("BOTTOMRIGHT", box, -3, 3)
     fill:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 1)
 
-    local label = row:CreateFontString(nil, "OVERLAY", "VA_GameFontHighlight")
+    local label = row:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlight")
     label:SetPoint("LEFT", box, "RIGHT", 8, 0)
     label:SetText(text)
-    local hint = row:CreateFontString(nil, "OVERLAY", "VA_GameFontDisableSmall")
+    local hint = row:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
     hint:SetPoint("LEFT", label, "RIGHT", 10, 0)
     hint:SetText(note)
 
@@ -70,15 +70,15 @@ local function Check(text, note, get, set, y)
 end
 
 Check("Direction arrow", "Points to the marked vendor",
-    function() return not VA.db.arrowHidden end,
-    function(on) VA:SetArrowShown(on) end, -50)
+    function() return not MM.db.arrowHidden end,
+    function(on) MM:SetArrowShown(on) end, -50)
 
 Check("Lock arrow position", "So it can't be dragged by accident",
-    function() return VA.db.arrowLocked end,
-    function(on) VA.db.arrowLocked = on or nil end, -76)
+    function() return MM.db.arrowLocked end,
+    function(on) MM.db.arrowLocked = on or nil end, -76)
 
 -- Arrow size slider, 50% to 200%
-local sizeLabel = panel:CreateFontString(nil, "OVERLAY", "VA_GameFontHighlight")
+local sizeLabel = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlight")
 sizeLabel:SetPoint("TOPLEFT", 16, -108)
 sizeLabel:SetText("Arrow size")
 
@@ -100,40 +100,40 @@ thumb:SetSize(8, 14)
 thumb:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 1)
 slider:SetThumbTexture(thumb)
 
-local sizeValue = panel:CreateFontString(nil, "OVERLAY", "VA_GameFontDisableSmall")
+local sizeValue = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
 sizeValue:SetPoint("LEFT", slider, "RIGHT", 10, 0)
 
 -- Preview at the chosen size, off to the right so the largest size doesn't cover other options
 local preview = panel:CreateTexture(nil, "ARTWORK")
 preview:SetPoint("CENTER", panel, "TOPLEFT", 520, -115)
-preview:SetTexture(VA.ARROW_TEXTURE)
+preview:SetTexture(MM.ARROW_TEXTURE)
 preview:SetVertexColor(0.35, 0.85, 0.35)
 
 slider:SetScript("OnValueChanged", function(_, value)
     value = math.floor(value * 10 + 0.5) / 10
     sizeValue:SetText(("%d%%"):format(value * 100))
     preview:SetSize(56 * value, 56 * value)
-    VA:SetArrowSize(value)
+    MM:SetArrowSize(value)
 end)
 slider:SetScript("OnMouseWheel", function(self, delta)
     self:SetValue(self:GetValue() + delta * 0.1)
 end)
 
 Check("Open the map automatically", "When you click an item or service",
-    function() return not VA.db.noAutoMap end,
-    function(on) VA.db.noAutoMap = not on or nil end, -134)
+    function() return not MM.db.noAutoMap end,
+    function(on) MM.db.noAutoMap = not on or nil end, -134)
 
-Check("Minimap button", "Left-click opens Vendor Atlas",
-    function() return not (VA.db.minimapButton and VA.db.minimapButton.hide) end,
-    function(on) VA:SetMinimapButtonShown(on) end, -160)
+Check("Minimap button", "Left-click opens Merchant Map",
+    function() return not (MM.db.minimapButton and MM.db.minimapButton.hide) end,
+    function(on) MM:SetMinimapButtonShown(on) end, -160)
 
 Check("Minimap marker", "Shows the vendor you click on the minimap",
-    function() return not VA.db.noMinimapPin end,
-    function(on) VA:SetMinimapPinShown(on) end, -186)
+    function() return not MM.db.noMinimapPin end,
+    function(on) MM:SetMinimapPinShown(on) end, -186)
 
 Check("Waypoint", "Sets a map waypoint on the vendor you click",
-    function() return VA.db.autoWaypoint end,
-    function(on) VA.db.autoWaypoint = on or nil end, -212)
+    function() return MM.db.autoWaypoint end,
+    function(on) MM.db.autoWaypoint = on or nil end, -212)
 
 -- Raid marker dropdown
 local MARKERS = { "Star", "Circle", "Diamond", "Triangle", "Moon", "Square", "Cross", "Skull" }
@@ -151,8 +151,8 @@ end
 
 -- Checkbox turns raid markers on or off; the dropdown picks which one
 local markerCheck = Check("Target marker", "",
-    function() return not VA.db.noRaidMarker end,
-    function(on) VA:SetRaidMarkerEnabled(on) end, -244)
+    function() return not MM.db.noRaidMarker end,
+    function(on) MM:SetRaidMarkerEnabled(on) end, -244)
 markerCheck:SetWidth(120)
 
 local dropdown = CreateFrame("Button", nil, panel)
@@ -165,18 +165,18 @@ dropdown:SetHighlightTexture(ddHl)
 local ddIcon = dropdown:CreateTexture(nil, "ARTWORK")
 ddIcon:SetSize(14, 14)
 ddIcon:SetPoint("LEFT", 6, 0)
-local ddText = dropdown:CreateFontString(nil, "OVERLAY", "VA_GameFontHighlightSmall")
+local ddText = dropdown:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
 ddText:SetPoint("LEFT", ddIcon, "RIGHT", 6, 0)
-local ddArrow = dropdown:CreateFontString(nil, "OVERLAY", "VA_GameFontDisableSmall")
+local ddArrow = dropdown:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
 ddArrow:SetPoint("RIGHT", -7, 0)
 ddArrow:SetText("v")
 
-local markerNote = panel:CreateFontString(nil, "OVERLAY", "VA_GameFontDisableSmall")
+local markerNote = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
 markerNote:SetPoint("LEFT", dropdown, "RIGHT", 10, 0)
 markerNote:SetText("Put on the vendor you click")
 
 local function UpdateDropdown()
-    local i = VA.db.raidMarker or 8
+    local i = MM.db.raidMarker or 8
     ddIcon:SetTexture(MarkerIcon(i))
     ddText:SetText(MARKERS[i])
 end
@@ -200,11 +200,11 @@ for i, markerName in ipairs(MARKERS) do
     icon:SetSize(14, 14)
     icon:SetPoint("LEFT", 4, 0)
     icon:SetTexture(MarkerIcon(i))
-    local text = row:CreateFontString(nil, "OVERLAY", "VA_GameFontHighlightSmall")
+    local text = row:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
     text:SetPoint("LEFT", icon, "RIGHT", 6, 0)
     text:SetText(markerName)
     row:SetScript("OnClick", function()
-        VA:SetRaidMarker(i)
+        MM:SetRaidMarker(i)
         UpdateDropdown()
         list:Hide()
     end)
@@ -245,15 +245,15 @@ bg:SetColorTexture(C.buttonTop[1], C.buttonTop[2], C.buttonTop[3], 1)
 local hl = share:CreateTexture()
 hl:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.12)
 share:SetHighlightTexture(hl)
-share:SetNormalFontObject("VA_GameFontHighlightSmall")
+share:SetNormalFontObject("MM_GameFontHighlightSmall")
 share:SetText("Share verified data...")
-share:SetScript("OnClick", function() VA:ToggleShare() end)
+share:SetScript("OnClick", function() MM:ToggleShare() end)
 
-local shareNote = panel:CreateFontString(nil, "OVERLAY", "VA_GameFontDisableSmall")
+local shareNote = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
 shareNote:SetPoint("LEFT", share, "RIGHT", 10, 0)
 shareNote:SetText("Export what you've verified, or import someone else's")
 
-local help = panel:CreateFontString(nil, "OVERLAY", "VA_GameFontHighlightSmall")
+local help = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
 help:SetPoint("TOPLEFT", 16, -314)
 help:SetPoint("RIGHT", -16, 0)
 help:SetJustifyH("LEFT")
@@ -263,12 +263,12 @@ help:SetText(HELP)
 panel:SetScript("OnShow", function()
     for _, row in ipairs(checks) do row:Update() end
     UpdateDropdown()
-    slider:SetValue(VA.db.arrowScale or 1)
+    slider:SetValue(MM.db.arrowScale or 1)
 end)
 
-local category = Settings.RegisterCanvasLayoutCategory(panel, "Vendor Atlas")
+local category = Settings.RegisterCanvasLayoutCategory(panel, "Merchant Map")
 Settings.RegisterAddOnCategory(category)
 
-function VA:OpenOptions()
+function MM:OpenOptions()
     Settings.OpenToCategory(category:GetID())
 end

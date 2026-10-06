@@ -1,5 +1,5 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/">
-    <Button name="VendorAtlasPinTemplate" mixin="VendorAtlasPinMixin" virtual="true">
+    <Button name="MerchantMapPinTemplate" mixin="MerchantMapPinMixin" virtual="true">
         <Size x="22" y="22"/>
         <Layers>
             <Layer level="BACKGROUND">

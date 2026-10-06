@@ -1,6 +1,6 @@
-local _, VA = ...
+local _, MM = ...
 
-VA.services = {}
+MM.services = {}
 
 -- Adds Classic vendors and their stock for vendors not visited yet, flagged unverified.
 -- Also adds the verified data shipped in VerifiedData.lua.
@@ -44,7 +44,7 @@ local function ServiceIcon(path)
     return SERVICE_ICONS[two] or SERVICE_ICONS[rest:match("^[^/]+")]
 end
 
-function VA:ServiceIcon(path)
+function MM:ServiceIcon(path)
     return ServiceIcon(path)
 end
 
@@ -66,7 +66,7 @@ end
 -- Keyed "s" .. npcID for service NPCs and by Classic NPC ID for vendors whose shop you couldn't open.
 -- New service NPCs that aren't in the Classic data also carry their paths and faction.
 local function ConfirmedSpot(key)
-    local seen, shipped = VA.db.verifiedServices[key], VA.shippedServices[key]
+    local seen, shipped = MM.db.verifiedServices[key], MM.shippedServices[key]
     if shipped and (not seen or seen.t < shipped[5]) then
         seen = {
             name = shipped[1], mapID = shipped[2], x = shipped[3], y = shipped[4], t = shipped[5],
@@ -76,9 +76,9 @@ local function ConfirmedSpot(key)
     return seen
 end
 
--- Service NPCs (trainers, flight masters, innkeepers...) live only in memory: VA.services["s" .. npcID].
+-- Service NPCs (trainers, flight masters, innkeepers...) live only in memory: MM.services["s" .. npcID].
 -- They start unverified with their Classic location; verified ones (yours or shipped) use the verified position.
-function VA:RefreshServices()
+function MM:RefreshServices()
     self.services = {}
     for npcID, v in pairs(self.knownServices) do
         local key = "s" .. npcID
@@ -204,7 +204,7 @@ local function FindNPC(list, key, name, zone, filter)
     local npc = key and list[key]
     if npc and (not filter or filter(npc)) then return key, npc end
     for k, candidate in pairs(list) do
-        if candidate.name == name and (not filter or filter(candidate)) and VA:ZoneOf(candidate.mapID) == zone then
+        if candidate.name == name and (not filter or filter(candidate)) and MM:ZoneOf(candidate.mapID) == zone then
             return k, candidate
         end
     end
@@ -227,16 +227,16 @@ local function ConfirmNPC(unit, event, kind)
     if guid and not (issecretvalue and issecretvalue(guid)) then
         npcID = tonumber((select(6, strsplit("-", guid))))
     end
-    local zone = VA:ZoneOf(mapID)
+    local zone = MM:ZoneOf(mapID)
     local x, y = pos:GetXY()
     local now = time()
     local changed = false
 
-    local key, npc = FindNPC(VA.services, npcID and "s" .. npcID, name, zone)
+    local key, npc = FindNPC(MM.services, npcID and "s" .. npcID, name, zone)
     if npc then
         -- New NPCs keep what they offer, since the Classic data can't supply it
-        local isNew = not VA.knownServices[tonumber(key:sub(2))]
-        VA.db.verifiedServices[key] = {
+        local isNew = not MM.knownServices[tonumber(key:sub(2))]
+        MM.db.verifiedServices[key] = {
             name = name, mapID = mapID, x = x, y = y, t = now,
             paths = isNew and npc.paths or nil, faction = isNew and npc.faction or nil, title = isNew and npc.title or nil,
         }
@@ -245,25 +245,25 @@ local function ConfirmNPC(unit, event, kind)
     elseif npcID and NewServicePath(unit, event, kind) then
         -- A service NPC the Classic data doesn't have
         local side = UnitFactionGroup(unit)
-        VA.db.verifiedServices["s" .. npcID] = {
+        MM.db.verifiedServices["s" .. npcID] = {
             name = name, mapID = mapID, x = x, y = y, t = now, paths = { NewServicePath(unit, event, kind) },
             title = UnitTitle(unit),
             faction = side == "Horde" and "H" or side == "Alliance" and "A" or "AH",
         }
-        VA:RefreshServices()
+        MM:RefreshServices()
         changed = true
     end
 
-    key, npc = FindNPC(VA.db.vendors, npcID, name, zone, IsClassicSeed)
+    key, npc = FindNPC(MM.db.vendors, npcID, name, zone, IsClassicSeed)
     if npc then
-        VA.db.verifiedServices[key] = { name = name, mapID = mapID, x = x, y = y, t = now }
+        MM.db.verifiedServices[key] = { name = name, mapID = mapID, x = x, y = y, t = now }
         changed = changed or not npc.located
         npc.mapID, npc.x, npc.y, npc.located = mapID, x, y, now
     end
 
     if changed then
-        VA:OnDataChanged()
-        VA:PointToNextUnverified()
+        MM:OnDataChanged()
+        MM:PointToNextUnverified()
     end
 end
 
@@ -318,10 +318,10 @@ local setAside = {}
 -- Verified vendors shipped with the addon (VerifiedData.lua). Shown when newer than your own visit,
 -- without touching your saved data.
 local function SeedShipped(db)
-    for key, v in pairs(VA.shippedVendors) do
+    for key, v in pairs(MM.shippedVendors) do
         local name, mapID, x, y, seen, stock, seedID = unpack(v)
         local mine = db.vendors[key]
-        local classic = VA.knownVendors[key] or (seedID and VA.knownVendors[seedID])
+        local classic = MM.knownVendors[key] or (seedID and MM.knownVendors[seedID])
         local sameFaction = not classic or classic[3]:find(faction, 1, true)
         if sameFaction and not (mine and (mine.lastSeen or 0) >= seen) then
             if mine then
@@ -341,7 +341,7 @@ local function SeedShipped(db)
                 local item = db.items[itemID]
                 if not item then
                     item = {
-                        name = C_Item.GetItemNameByID(itemID) or VA.shippedItemNames[itemID],
+                        name = C_Item.GetItemNameByID(itemID) or MM.shippedItemNames[itemID],
                         icon = C_Item.GetItemIconByID(itemID),
                         vendors = {},
                     }
@@ -349,14 +349,14 @@ local function SeedShipped(db)
                 end
                 item.vendors[key] = { price = offer[1], cost = offer[2], limited = offer[3], pvp = offer[4], shipped = true }
                 vendor.items[itemID] = true
-                VA:QueueAutoCategorize(itemID)
+                MM:QueueAutoCategorize(itemID)
             end
         end
     end
 end
 
 local function Seed()
-    local db = VA.db
+    local db = MM.db
     byName, areaMaps = ZoneMapsByName(), {}
     faction = UnitFactionGroup("player") == "Horde" and "H" or "A"
     SeedShipped(db)
@@ -367,8 +367,8 @@ local function Seed()
         if vendor.seedID then adopted[vendor.seedID] = true end
     end
 
-    VA:RefreshServices()
-    for npcID, v in pairs(VA.knownVendors) do
+    MM:RefreshServices()
+    for npcID, v in pairs(MM.knownVendors) do
         if not db.vendors[npcID] and not adopted[npcID] and v[3]:find(faction, 1, true) then
             local mapID = AreaMap(v[4])
             local vendor = { name = v[1], title = v[2], items = {}, unverified = true }
@@ -382,7 +382,7 @@ local function Seed()
                 local item = db.items[itemID]
                 if not item then
                     item = {
-                        name = C_Item.GetItemNameByID(itemID) or VA.knownItemNames[itemID],
+                        name = C_Item.GetItemNameByID(itemID) or MM.knownItemNames[itemID],
                         icon = C_Item.GetItemIconByID(itemID),
                         vendors = {},
                     }
@@ -390,14 +390,14 @@ local function Seed()
                 end
                 item.vendors[npcID] = { unverified = true }
                 vendor.items[itemID] = true
-                VA:QueueAutoCategorize(itemID)
+                MM:QueueAutoCategorize(itemID)
             end
         end
     end
 end
 
 local function Strip()
-    local db = VA.db
+    local db = MM.db
     for key, vendor in pairs(db.vendors) do
         if vendor.unverified or vendor.shipped then db.vendors[key] = nil end
     end

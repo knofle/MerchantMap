@@ -1,16 +1,16 @@
-local _, VA = ...
+local _, MM = ...
 
 -- Direction arrow to the marked vendor, like TomTom's. Shown while a vendor is marked.
--- Drag to move, right-click to clear the marker, /va arrow to turn it off or on.
+-- Drag to move, right-click to clear the marker, /mm arrow to turn it off or on.
 
-local ARROW = "Interface\\AddOns\\VendorAtlas\\arrow"
-VA.ARROW_TEXTURE = ARROW
+local ARROW = "Interface\\AddOns\\MerchantMap\\arrow"
+MM.ARROW_TEXTURE = ARROW
 local INTERVAL = 0.05
 local ARRIVED = 5 -- yards
 
 local target, continent, tx, ty, width, height
 
-local frame = CreateFrame("Button", "VendorAtlasArrow", UIParent)
+local frame = CreateFrame("Button", "MerchantMapArrow", UIParent)
 frame:SetSize(56, 56)
 frame:SetPoint("CENTER", 0, 180)
 frame:SetMovable(true)
@@ -23,10 +23,10 @@ local arrow = frame:CreateTexture(nil, "ARTWORK")
 arrow:SetAllPoints()
 arrow:SetTexture(ARROW)
 
-local name = frame:CreateFontString(nil, "OVERLAY", "VA_GameFontHighlightSmall")
+local name = frame:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
 name:SetPoint("TOP", frame, "BOTTOM", 0, -2)
 
-local distance = frame:CreateFontString(nil, "OVERLAY", "VA_GameFontDisableSmall")
+local distance = frame:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
 distance:SetPoint("TOP", name, "BOTTOM", 0, -1)
 
 local continents = {}
@@ -61,7 +61,7 @@ local function Locate()
         -- Changed continent: find the vendor on the new one
         continent, tx = here, nil
         if here then
-            tx, ty = VA:PosOnMap(target, here)
+            tx, ty = MM:PosOnMap(target, here)
             width, height = C_Map.GetMapWorldSize(here)
         end
     end
@@ -111,7 +111,7 @@ frame:SetScript("OnUpdate", Update)
 -- Locking (in the options) stops dragging
 local moving
 local function StartMoving()
-    if VA.db.arrowLocked then return end
+    if MM.db.arrowLocked then return end
     moving = true
     frame:StartMoving()
 end
@@ -120,31 +120,31 @@ local function StopMoving()
     moving = nil
     frame:StopMovingOrSizing()
     local point, _, relPoint, x, y = frame:GetPoint()
-    VA.db.arrowPoint = { point, relPoint, x, y }
+    MM.db.arrowPoint = { point, relPoint, x, y }
 end
 frame:SetScript("OnDragStart", StartMoving)
 frame:SetScript("OnDragStop", StopMoving)
 
 -- Left-click targets and skulls the NPC (through the targeting button). While verifying
--- (/va unverified), shift-click finds the nearest from where you are and right-click skips one;
+-- (/mm unverified), shift-click finds the nearest from where you are and right-click skips one;
 -- otherwise right-click clears the marker.
 local function OnClick(_, button)
     if button == "LeftButton" then
-        if VA.verifyMode and IsShiftKeyDown() then VA:PointToNextUnverified() end
-    elseif VA.verifyMode then
-        VA:SkipUnverified()
+        if MM.verifyMode and IsShiftKeyDown() then MM:PointToNextUnverified() end
+    elseif MM.verifyMode then
+        MM:SkipUnverified()
     else
-        VA:ClearMinimapVendor()
+        MM:ClearMinimapVendor()
     end
 end
 frame:SetScript("OnClick", OnClick)
 
 local function ShowTooltip(self)
     GameTooltip:SetOwner(self, "ANCHOR_TOP")
-    GameTooltip:AddLine(target and target.name or "Vendor Atlas", 1, 1, 1)
+    GameTooltip:AddLine(target and target.name or "Merchant Map", 1, 1, 1)
     GameTooltip:AddLine("Click to target and mark them (when nearby)", 0.5, 0.5, 0.5)
-    if not VA.db.arrowLocked then GameTooltip:AddLine("Drag to move", 0.5, 0.5, 0.5) end
-    if VA.verifyMode then
+    if not MM.db.arrowLocked then GameTooltip:AddLine("Drag to move", 0.5, 0.5, 0.5) end
+    if MM.verifyMode then
         GameTooltip:AddLine("Shift-click to find the nearest from where you are", 0.35, 0.85, 0.35)
         GameTooltip:AddLine("Right-click to skip to the next one", 0.35, 0.85, 0.35)
     else
@@ -155,7 +155,7 @@ end
 
 local function AttachTargeting()
     if not target then return end
-    VA:AttachTargetButton(frame, {
+    MM:AttachTargetButton(frame, {
         name = target.name,
         unmarkName = target.name,
         rightClick = true,
@@ -172,11 +172,11 @@ frame:SetScript("OnEnter", function(self)
     AttachTargeting()
 end)
 frame:SetScript("OnLeave", function(self)
-    if not VA:IsTargetOwner(self) then GameTooltip:Hide() end
+    if not MM:IsTargetOwner(self) then GameTooltip:Hide() end
 end)
 
 -- Called by the minimap marker; nil hides the arrow
-function VA:SetArrowTarget(vendor)
+function MM:SetArrowTarget(vendor)
     target, continent, tx = vendor, nil, nil
     if vendor and not self.db.arrowHidden then
         name:SetText(vendor.name)
@@ -192,30 +192,30 @@ function VA:SetArrowTarget(vendor)
     end
 end
 
-function VA:SetArrowShown(show)
+function MM:SetArrowShown(show)
     self.db.arrowHidden = not show or nil
     self:SetArrowTarget(target)
 end
 
 -- Arrow size as a scale of its normal 56 pixels; the text below it keeps its size
 local SIZE = 56
-function VA:SetArrowSize(scale)
+function MM:SetArrowSize(scale)
     self.db.arrowScale = scale ~= 1 and scale or nil
     frame:SetSize(SIZE * scale, SIZE * scale)
 end
 
-function VA:ToggleArrow()
+function MM:ToggleArrow()
     self:SetArrowShown(self.db.arrowHidden)
-    print(("|cffccb084Vendor Atlas:|r arrow %s."):format(self.db.arrowHidden and "off" or "on"))
+    print(("|cffccb084Merchant Map:|r arrow %s."):format(self.db.arrowHidden and "off" or "on"))
 end
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function()
-    local p = VA.db.arrowPoint
+    local p = MM.db.arrowPoint
     if p then
         frame:ClearAllPoints()
         frame:SetPoint(p[1], UIParent, p[2], p[3], p[4])
     end
-    VA:SetArrowSize(VA.db.arrowScale or 1)
+    MM:SetArrowSize(MM.db.arrowScale or 1)
 end)

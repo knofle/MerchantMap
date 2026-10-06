@@ -1,4 +1,4 @@
-local _, VA = ...
+local _, MM = ...
 
 -- Sorts items into categories from item class and tooltip text.
 -- Runs once per item; manual edits afterwards are never overwritten.
@@ -131,7 +131,7 @@ local function Classify(itemID)
         return paths
     end
 
-    local item = VA.db.items[itemID]
+    local item = MM.db.items[itemID]
     for _, offer in pairs(item and item.vendors or {}) do
         if offer.pvp and not pvp then
             pvp = true
@@ -235,13 +235,13 @@ local function Process()
         queue[head], head = nil, head + 1
         queued[itemID] = nil
 
-        if VA.db.items[itemID] and not VA.db.autoDone[itemID] then
+        if MM.db.items[itemID] and not MM.db.autoDone[itemID] then
             local paths = Classify(itemID)
             if paths then
                 for _, path in ipairs(paths) do
-                    VA:AssignItem(itemID, VA:AddCategory(path))
+                    MM:AssignItem(itemID, MM:AddCategory(path))
                 end
-                VA.db.autoDone[itemID] = true
+                MM.db.autoDone[itemID] = true
                 changed = changed or #paths > 0
             else
                 attempts[itemID] = (attempts[itemID] or 0) + 1
@@ -254,10 +254,10 @@ local function Process()
         ticker:Cancel()
         ticker, head, tail = nil, 1, 0
     end
-    if changed then VA:OnDataChanged() end
+    if changed then MM:OnDataChanged() end
 end
 
-function VA:QueueAutoCategorize(itemID)
+function MM:QueueAutoCategorize(itemID)
     if self.db.autoDone[itemID] or queued[itemID] then return end
     attempts[itemID] = nil
     Push(itemID)
@@ -265,7 +265,7 @@ function VA:QueueAutoCategorize(itemID)
 end
 
 -- Re-runs the classifier for items that are in no category
-function VA:AutoCategorizeUncategorized()
+function MM:AutoCategorizeUncategorized()
     local count = 0
     for itemID in pairs(self.db.items) do
         if not self.db.itemCats[itemID] then
@@ -280,5 +280,5 @@ end
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function()
-    for itemID in pairs(VA.db.items) do VA:QueueAutoCategorize(itemID) end
+    for itemID in pairs(MM.db.items) do MM:QueueAutoCategorize(itemID) end
 end)

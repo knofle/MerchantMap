@@ -1,11 +1,12 @@
-local _, VA = ...
+local _, MM = ...
 
 -- Share verified data: export what you've confirmed in-game as a text string others can import.
 -- Vendors (position and stock with prices) and service NPCs you've talked to are included,
 -- but only when newer than the data shipped with the addon. Needs LibSerialize and LibDeflate.
 
-local PREFIX = "!VA1!"
-local C = VA.COLORS
+local PREFIX = "!MM1!"
+local OLD_PREFIX = "!VA1!" -- exports made before the rename from Vendor Atlas
+local C = MM.COLORS
 
 local function Libs()
     local serialize = LibStub and LibStub("LibSerialize", true)
@@ -20,7 +21,7 @@ local function NZ(n)
     if n ~= 0 then return n end
 end
 
-function VA:ExportData()
+function MM:ExportData()
     local LibSerialize, LibDeflate = Libs()
     if not (LibSerialize and LibDeflate) then return nil, "LibSerialize and LibDeflate are needed." end
 
@@ -83,7 +84,7 @@ local function ImportVendor(db, key, rec, items)
     end
 
     local vendor = { name = name, mapID = mapID, x = x, y = y, lastSeen = seen, items = {} }
-    vendor.seedID = VA:RemoveSeedFor(key, name, mapID) or seedID or (current and current.seedID)
+    vendor.seedID = MM:RemoveSeedFor(key, name, mapID) or seedID or (current and current.seedID)
     db.vendors[key] = vendor
 
     for itemID, offer in pairs(stock) do
@@ -96,19 +97,20 @@ local function ImportVendor(db, key, rec, items)
         if item.name then
             item.vendors[key] = { price = offer[1] or 0, cost = offer[2], limited = offer[3], pvp = offer[4] }
             vendor.items[itemID] = true
-            VA:QueueAutoCategorize(itemID)
+            MM:QueueAutoCategorize(itemID)
         end
     end
     return true
 end
 
 -- Returns vendors and services taken, or nil and an error message
-function VA:ImportData(text)
+function MM:ImportData(text)
     local LibSerialize, LibDeflate = Libs()
     if not (LibSerialize and LibDeflate) then return nil, "LibSerialize and LibDeflate are needed." end
 
     text = strtrim(text or "")
-    if text:sub(1, #PREFIX) ~= PREFIX then return nil, "That isn't Vendor Atlas data." end
+    if text:sub(1, #OLD_PREFIX) == OLD_PREFIX then text = PREFIX .. text:sub(#OLD_PREFIX + 1) end
+    if text:sub(1, #PREFIX) ~= PREFIX then return nil, "That isn't Merchant Map data." end
     local packed = LibDeflate:DecodeForPrint(text:sub(#PREFIX + 1))
     local serialized = packed and LibDeflate:DecompressDeflate(packed)
     local ok, data = false, nil
@@ -155,13 +157,13 @@ local function Button(parent, text, width)
     local hl = b:CreateTexture()
     hl:SetColorTexture(C.accent[1], C.accent[2], C.accent[3], 0.12)
     b:SetHighlightTexture(hl)
-    b:SetNormalFontObject("VA_GameFontHighlightSmall")
+    b:SetNormalFontObject("MM_GameFontHighlightSmall")
     b:SetText(text)
     return b
 end
 
 local function CreateDialog()
-    dialog = CreateFrame("Frame", "VendorAtlasShareFrame", UIParent)
+    dialog = CreateFrame("Frame", "MerchantMapShareFrame", UIParent)
     dialog:SetSize(460, 300)
     dialog:SetPoint("CENTER")
     dialog:SetFrameStrata("FULLSCREEN_DIALOG")
@@ -174,9 +176,9 @@ local function CreateDialog()
     Skin(dialog, C.bg, 0.97)
     -- New frames start shown; start hidden so the first toggle opens it
     dialog:Hide()
-    tinsert(UISpecialFrames, "VendorAtlasShareFrame")
+    tinsert(UISpecialFrames, "MerchantMapShareFrame")
 
-    local title = dialog:CreateFontString(nil, "OVERLAY", "VA_GameFontNormal")
+    local title = dialog:CreateFontString(nil, "OVERLAY", "MM_GameFontNormal")
     title:SetPoint("TOPLEFT", 10, -9)
     title:SetText("Share verified data")
     title:SetTextColor(C.accent[1], C.accent[2], C.accent[3])
@@ -184,11 +186,11 @@ local function CreateDialog()
     local close = CreateFrame("Button", nil, dialog)
     close:SetSize(20, 20)
     close:SetPoint("TOPRIGHT", -4, -4)
-    close:SetNormalFontObject("VA_GameFontHighlight")
+    close:SetNormalFontObject("MM_GameFontHighlight")
     close:SetText("x")
     close:SetScript("OnClick", function() dialog:Hide() end)
 
-    local help = dialog:CreateFontString(nil, "OVERLAY", "VA_GameFontDisableSmall")
+    local help = dialog:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
     help:SetPoint("TOPLEFT", 10, -30)
     help:SetPoint("RIGHT", -10, 0)
     help:SetJustifyH("LEFT")
@@ -209,7 +211,7 @@ local function CreateDialog()
     box:SetMultiLine(true)
     box:SetAutoFocus(false)
     box:SetMaxLetters(0)
-    box:SetFontObject("VA_GameFontHighlightSmall")
+    box:SetFontObject("MM_GameFontHighlightSmall")
     box:SetWidth(420)
     box:SetScript("OnEscapePressed", box.ClearFocus)
     scroll:SetScrollChild(box)
@@ -219,7 +221,7 @@ local function CreateDialog()
     end)
     well:SetScript("OnMouseDown", function() box:SetFocus() end)
 
-    local status = dialog:CreateFontString(nil, "OVERLAY", "VA_GameFontDisableSmall")
+    local status = dialog:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
     status:SetPoint("BOTTOMLEFT", 10, 38)
     status:SetPoint("RIGHT", -10, 0)
     status:SetJustifyH("LEFT")
@@ -227,7 +229,7 @@ local function CreateDialog()
     local export = Button(dialog, "Export", 90)
     export:SetPoint("BOTTOMLEFT", 10, 10)
     export:SetScript("OnClick", function()
-        local text, vendors, services = VA:ExportData()
+        local text, vendors, services = MM:ExportData()
         if not text then
             status:SetText("|cffff5a4d" .. vendors .. "|r")
             return
@@ -241,7 +243,7 @@ local function CreateDialog()
     local import = Button(dialog, "Import", 90)
     import:SetPoint("LEFT", export, "RIGHT", 6, 0)
     import:SetScript("OnClick", function()
-        local vendors, services = VA:ImportData(box:GetText())
+        local vendors, services = MM:ImportData(box:GetText())
         if not vendors then
             status:SetText("|cffff5a4d" .. services .. "|r")
             return
@@ -257,7 +259,7 @@ local function CreateDialog()
     end)
 end
 
-function VA:ToggleShare()
+function MM:ToggleShare()
     if not dialog then CreateDialog() end
     dialog:SetShown(not dialog:IsShown())
 end

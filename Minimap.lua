@@ -1,4 +1,4 @@
-local _, VA = ...
+local _, MM = ...
 
 -- Minimap pin for the last vendor you clicked on the world map.
 -- Cleared by right-clicking it, or by opening that vendor's shop.
@@ -63,7 +63,7 @@ local function Offset()
     if not continent then return end
     if cached.continent ~= continent then
         cached.continent = continent
-        cached.vx, cached.vy = VA:PosOnMap(target, continent)
+        cached.vx, cached.vy = MM:PosOnMap(target, continent)
         cached.width, cached.height = C_Map.GetMapWorldSize(continent)
     end
     local player = C_Map.GetPlayerMapPosition(continent, "player")
@@ -148,7 +148,7 @@ local function ShowTooltip(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
     GameTooltip:AddLine(target.name, 1, 0.82, 0)
     if target.title then GameTooltip:AddLine("<" .. target.title .. ">", 0.8, 0.8, 0.8) end
-    GameTooltip:AddLine(VA:LocationText(target), 0.8, 0.8, 0.8)
+    GameTooltip:AddLine(MM:LocationText(target), 0.8, 0.8, 0.8)
     GameTooltip:AddLine("Right-click to remove", 0.5, 0.5, 0.5)
     GameTooltip:Show()
 end
@@ -157,46 +157,46 @@ end
 -- button laid over the pin while it's hovered
 pin:SetScript("OnEnter", function(self)
     ShowTooltip(self)
-    VA:AttachTargetButton(self, {
+    MM:AttachTargetButton(self, {
         rightClick = true,
         unmarkName = target.name,
         onEnter = ShowTooltip,
         onLeave = GameTooltip_Hide,
         onClick = function(_, button)
-            if button == "RightButton" then VA:ClearMinimapVendor() end
+            if button == "RightButton" then MM:ClearMinimapVendor() end
         end,
     })
 end)
 pin:SetScript("OnLeave", function(self)
-    if not VA:IsTargetOwner(self) then GameTooltip:Hide() end
+    if not MM:IsTargetOwner(self) then GameTooltip:Hide() end
 end)
 
 -- Set when the waypoint option placed a waypoint, so clearing the marker can take it away again
 local placedWaypoint
 
-function VA:ClearMinimapVendor()
-    target, VA.minimapKey = nil, nil
+function MM:ClearMinimapVendor()
+    target, MM.minimapKey = nil, nil
     pin:Hide()
     if placedWaypoint then
         placedWaypoint = nil
-        VA:ClearWaypoint()
+        MM:ClearWaypoint()
     end
-    VA:SetArrowTarget(nil)
-    VA:RefreshMap()
+    MM:SetArrowTarget(nil)
+    MM:RefreshMap()
 end
 
 -- Option: the marked vendor can be left off the minimap; the arrow and world map still show it
-function VA:SetMinimapPinShown(show)
+function MM:SetMinimapPinShown(show)
     self.db.noMinimapPin = not show or nil
     pin:SetShown(show and target ~= nil)
 end
 
-pin:SetScript("OnClick", function() VA:ClearMinimapVendor() end)
+pin:SetScript("OnClick", function() MM:ClearMinimapVendor() end)
 
 -- label names the waypoint (the item you clicked); defaults to the vendor's name
-function VA:SetMinimapVendor(vendor, key, label)
+function MM:SetMinimapVendor(vendor, key, label)
     if not (vendor and vendor.mapID) then return end
-    target, VA.minimapKey = vendor, key
+    target, MM.minimapKey = vendor, key
     wipe(cached)
     ReadSettings()
     ReadIndoors(true)
@@ -206,15 +206,15 @@ function VA:SetMinimapVendor(vendor, key, label)
     else
         ring:SetVertexColor(0.85, 0.68, 0.2)
     end
-    pin:SetShown(not VA.db.noMinimapPin)
+    pin:SetShown(not MM.db.noMinimapPin)
     Update()
     -- Option: a map waypoint on the vendor too
-    if VA.db.autoWaypoint then
-        VA:SetWaypoint(vendor, label)
+    if MM.db.autoWaypoint then
+        MM:SetWaypoint(vendor, label)
         placedWaypoint = true
     end
-    VA:SetArrowTarget(vendor)
-    VA:RefreshMap()
+    MM:SetArrowTarget(vendor)
+    MM:RefreshMap()
 end
 
 -- Reaching the vendor clears the pin
@@ -231,6 +231,6 @@ events:SetScript("OnEvent", function(_, event)
     elseif event ~= "MERCHANT_SHOW" then
         if target then ReadIndoors(event ~= "MINIMAP_UPDATE_ZOOM") end
     elseif target and UnitName("npc") == target.name then
-        VA:ClearMinimapVendor()
+        MM:ClearMinimapVendor()
     end
 end)

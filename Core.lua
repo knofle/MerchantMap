@@ -1,4 +1,4 @@
-local addonName, VA = ...
+local addonName, MM = ...
 
 -- Fonts ------------------------------------------------------------------
 -- Copies of the Blizzard font objects we use, switched to the addon's font.
@@ -6,7 +6,7 @@ local addonName, VA = ...
 local FONT = "Interface\\AddOns\\" .. addonName .. "\\fonts\\Expressway.ttf"
 
 -- Earthy palette shared by the window and the map widgets
-VA.COLORS = {
+MM.COLORS = {
     accent = { 0.80, 0.69, 0.52 },   -- sand: titles, selection, highlights
     text = { 0.86, 0.80, 0.70 },     -- warm off-white for "Normal" fonts
     border = { 0.36, 0.31, 0.25 },   -- muted bronze
@@ -17,7 +17,7 @@ VA.COLORS = {
     buttonTop = { 0.235, 0.205, 0.17 },
 }
 -- Tiled grain laid over flat backgrounds
-VA.GRAIN = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark"
+MM.GRAIN = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark"
 
 for _, name in ipairs({
     "GameFontNormal", "GameFontNormalSmall", "GameFontNormalLarge",
@@ -25,13 +25,13 @@ for _, name in ipairs({
     "GameFontDisable", "GameFontDisableSmall", "GameFontDisableLarge",
     "ChatFontNormal",
 }) do
-    local font = CreateFont("VA_" .. name)
+    local font = CreateFont("MM_" .. name)
     font:CopyFontObject(_G[name])
     local _, size, flags = font:GetFont()
     font:SetFont(FONT, size, flags)
     -- Blizzard's "Normal" fonts are gold; use the warm off-white instead
     if name:find("Normal", 1, true) and name ~= "ChatFontNormal" then
-        font:SetTextColor(unpack(VA.COLORS.text))
+        font:SetTextColor(unpack(MM.COLORS.text))
     end
 end
 
@@ -105,12 +105,12 @@ local function AdoptSeed(key, name, zone)
     end
 end
 
-function VA:ZoneOf(mapID)
+function MM:ZoneOf(mapID)
     return ZoneOf(mapID)
 end
 
 -- Drops the Classic seed that stands for this vendor when Forever's ID differs (used by imports)
-function VA:RemoveSeedFor(key, name, mapID)
+function MM:RemoveSeedFor(key, name, mapID)
     local zone = ZoneOf(mapID)
     for seedID, seed in pairs(db.vendors) do
         if seedID ~= key and seed.unverified and seed.name == name and (not seed.mapID or seed.mapID == zone) then
@@ -129,7 +129,7 @@ end
 
 -- Scanning --------------------------------------------------------------
 
-function VA:ScanMerchant()
+function MM:ScanMerchant()
     scanPending = false
     local key, vendorName = VendorKey()
     if not key then return end
@@ -188,7 +188,7 @@ function VA:ScanMerchant()
                 pvp = pvp or nil,
                 limited = (numAvailable and numAvailable >= 0) or nil,
             }
-            VA:QueueAutoCategorize(itemID)
+            MM:QueueAutoCategorize(itemID)
         else
             complete = false
         end
@@ -219,32 +219,32 @@ local function QueueScan()
     if scanPending then return end
     scanPending = true
     C_Timer.After(0.3, function()
-        if MerchantFrame and MerchantFrame:IsShown() then VA:ScanMerchant() end
+        if MerchantFrame and MerchantFrame:IsShown() then MM:ScanMerchant() end
         scanPending = false
     end)
 end
 
 -- Shared formatting -------------------------------------------------------
 
-function VA:MoneyText(copper)
+function MM:MoneyText(copper)
     if GetMoneyString then return GetMoneyString(copper, true) end
     return C_CurrencyInfo.GetCoinTextureString(copper)
 end
 
-VA.UNVERIFIED = "|cffff5a4dunverified|r"
+MM.UNVERIFIED = "|cffff5a4dunverified|r"
 
-function VA:OfferVisible(offer)
+function MM:OfferVisible(offer)
     return not (offer.unverified and self.db.hideUnverified)
 end
 
-function VA:ItemVisible(item)
+function MM:ItemVisible(item)
     for _, offer in pairs(item.vendors) do
         if self:OfferVisible(offer) then return true end
     end
     return false
 end
 
-function VA:PriceText(offer)
+function MM:PriceText(offer)
     if offer.unverified then return self.UNVERIFIED end
     local text = offer.cost
     if offer.price and offer.price > 0 then
@@ -255,13 +255,13 @@ function VA:PriceText(offer)
     return text
 end
 
-function VA:LocationText(vendor)
+function MM:LocationText(vendor)
     local info = vendor.mapID and C_Map.GetMapInfo(vendor.mapID)
     if not info then return "Unknown location" end
     return ("%s %.1f, %.1f"):format(info.name, vendor.x * 100, vendor.y * 100)
 end
 
-function VA:ZoneName(vendor)
+function MM:ZoneName(vendor)
     local info = vendor.mapID and C_Map.GetMapInfo(vendor.mapID)
     return info and info.name or "Unknown"
 end
@@ -277,18 +277,20 @@ events:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 events:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" then
         if arg1 ~= addonName then return end
-        VendorAtlasDB = VendorAtlasDB or {}
-        db = VendorAtlasDB
+        -- Data saved under the old name, Vendor Atlas, carries over
+        MerchantMapDB = MerchantMapDB or VendorAtlasDB or {}
+        VendorAtlasDB = nil
+        db = MerchantMapDB
         db.vendors = db.vendors or {}
         db.items = db.items or {}
         db.hiddenVendors = db.hiddenVendors or {}
         db.verifiedServices = db.verifiedServices or {}
-        VA.db = db
-        VA:InitCategories()
+        MM.db = db
+        MM:InitCategories()
         events:UnregisterEvent("ADDON_LOADED")
     elseif event == "MERCHANT_SHOW" then
         scanAttempts = 0
-        VA:ScanMerchant()
+        MM:ScanMerchant()
     elseif scanIncomplete and not scanPending and scanAttempts < 5 then
         -- Retry only while item data is still loading
         scanAttempts = scanAttempts + 1

@@ -1,20 +1,20 @@
-local _, VA = ...
+local _, MM = ...
 
 local ROW_H = 20
 -- Visible rows; recalculated when the window is resized
 local ROWS, TREE_ROWS = 18, 16
 local TREE_W, LIST_W = 180, 360
-local C = VA.COLORS
+local C = MM.COLORS
 local ACCENT, BORDER = C.accent, C.border
 local MAX_TOOLTIP_VENDORS = 12
-local ALL, UNCAT = VA.ALL, VA.UNCAT
+local ALL, UNCAT = MM.ALL, MM.UNCAT
 
 local results, offset, selected = {}, 0, nil
 local nodes, treeOffset, category = {}, 0, ALL
 
 -- The compact view always lists all items; the chosen category comes back with the full view
 local function ActiveCategory()
-    return VA.db.compact and ALL or category
+    return MM.db.compact and ALL or category
 end
 local counts, lowerNames, lowerPaths, sortKeys = {}, {}, {}, {}
 local editMode
@@ -63,7 +63,7 @@ end
 local function Grain(frame, alpha)
     local t = frame:CreateTexture(nil, "BACKGROUND", nil, 1)
     t:SetAllPoints()
-    t:SetTexture(VA.GRAIN, "REPEAT", "REPEAT")
+    t:SetTexture(MM.GRAIN, "REPEAT", "REPEAT")
     t:SetHorizTile(true)
     t:SetVertTile(true)
     t:SetAlpha(alpha)
@@ -94,7 +94,7 @@ end
 
 local function EditBox(parent)
     local box = CreateFrame("EditBox", nil, parent)
-    box:SetFontObject("VA_ChatFontNormal")
+    box:SetFontObject("MM_ChatFontNormal")
     box:SetAutoFocus(false)
     box:SetTextInsets(6, 6, 0, 0)
     Fill(box, C.inset, 0.95)
@@ -106,9 +106,9 @@ local function TextButton(parent, text, width)
     local b = CreateFrame("Button", nil, parent)
     b:SetSize(width, 20)
     SkinButton(b)
-    b:SetNormalFontObject("VA_GameFontHighlightSmall")
-    b:SetHighlightFontObject("VA_GameFontNormalSmall")
-    b:SetDisabledFontObject("VA_GameFontDisableSmall")
+    b:SetNormalFontObject("MM_GameFontHighlightSmall")
+    b:SetHighlightFontObject("MM_GameFontNormalSmall")
+    b:SetDisabledFontObject("MM_GameFontDisableSmall")
     b:SetText(text)
     return b
 end
@@ -181,7 +181,7 @@ end
 
 -- Layout ------------------------------------------------------------------
 
-local panel = CreateFrame("Frame", "VendorAtlasFrame", UIParent)
+local panel = CreateFrame("Frame", "MerchantMapFrame", UIParent)
 panel:SetSize(10 + TREE_W + 8 + LIST_W + 10, 76 + ROWS * ROW_H + 26)
 panel:SetPoint("CENTER")
 panel:SetFrameStrata("FULLSCREEN_DIALOG")
@@ -205,14 +205,14 @@ rule:SetHeight(1)
 rule:SetPoint("BOTTOMLEFT")
 rule:SetPoint("BOTTOMRIGHT")
 rule:SetColorTexture(BORDER[1], BORDER[2], BORDER[3], 1)
-tinsert(UISpecialFrames, "VendorAtlasFrame")
+tinsert(UISpecialFrames, "MerchantMapFrame")
 
 -- Position is shared; the full and compact views each remember their own size
 local function SaveGeometry()
     local point, _, relPoint, x, y = panel:GetPoint()
-    VA.db.point = { point, relPoint, x, y }
+    MM.db.point = { point, relPoint, x, y }
     local size = { panel:GetWidth(), panel:GetHeight() }
-    if VA.db.compact then VA.db.compactSize = size else VA.db.size = size end
+    if MM.db.compact then MM.db.compactSize = size else MM.db.size = size end
 end
 
 panel:SetScript("OnDragStart", panel.StartMoving)
@@ -246,7 +246,7 @@ end
 
 local function Resize(self)
     local x, y = CursorXY()
-    local min = VA.db.compact and MIN_COMPACT or MIN_FULL
+    local min = MM.db.compact and MIN_COMPACT or MIN_FULL
     local w = math.max(min[1], math.min(MAX_W, x + self.offX - self.left))
     local h = math.max(min[2], math.min(MAX_H, self.top - (y - self.offY)))
     panel:SetSize(w, h)
@@ -266,16 +266,16 @@ grip:SetScript("OnMouseUp", function(self)
     SaveGeometry()
 end)
 
-local title = header:CreateFontString(nil, "OVERLAY", "VA_GameFontNormal")
+local title = header:CreateFontString(nil, "OVERLAY", "MM_GameFontNormal")
 title:SetPoint("TOPLEFT", 10, -7)
-title:SetText("Vendor Atlas")
+title:SetText("Merchant Map")
 title:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
 
 local close = CreateFrame("Button", nil, header)
 close:SetSize(20, 20)
 close:SetPoint("TOPRIGHT", -4, -4)
-close:SetNormalFontObject("VA_GameFontHighlight")
-close:SetHighlightFontObject("VA_GameFontNormal")
+close:SetNormalFontObject("MM_GameFontHighlight")
+close:SetHighlightFontObject("MM_GameFontNormal")
 close:SetText("x")
 close:SetScript("OnClick", function() panel:Hide() end)
 
@@ -284,7 +284,7 @@ local function SquareButton(parent, text, tip)
     local b = CreateFrame("Button", nil, parent)
     b:SetSize(18, 18)
     SkinButton(b)
-    b:SetNormalFontObject("VA_GameFontHighlightSmall")
+    b:SetNormalFontObject("MM_GameFontHighlightSmall")
     b:SetText(text)
     SetTooltip(b, tip)
     return b
@@ -298,7 +298,7 @@ local unverifiedBtn = CreateFrame("Button", nil, header)
 unverifiedBtn:SetSize(112, 18)
 unverifiedBtn:SetPoint("RIGHT", compactBtn, "LEFT", -6, 0)
 SkinButton(unverifiedBtn)
-local unverifiedLabel = unverifiedBtn:CreateFontString(nil, "OVERLAY", "VA_GameFontNormalSmall")
+local unverifiedLabel = unverifiedBtn:CreateFontString(nil, "OVERLAY", "MM_GameFontNormalSmall")
 unverifiedLabel:SetPoint("CENTER")
 unverifiedLabel:SetText("Toggle Unverified")
 SetTooltip(unverifiedBtn, "Show or hide Classic vendor data you haven't confirmed by visiting. It may have changed in Forever.")
@@ -307,9 +307,9 @@ local optionsBtn = CreateFrame("Button", nil, header)
 optionsBtn:SetSize(60, 18)
 optionsBtn:SetPoint("RIGHT", unverifiedBtn, "LEFT", -6, 0)
 SkinButton(optionsBtn)
-optionsBtn:SetNormalFontObject("VA_GameFontNormalSmall")
+optionsBtn:SetNormalFontObject("MM_GameFontNormalSmall")
 optionsBtn:SetText("Options")
-optionsBtn:SetScript("OnClick", function() VA:OpenOptions() end)
+optionsBtn:SetScript("OnClick", function() MM:OpenOptions() end)
 
 local box = EditBox(panel)
 box:SetPoint("TOPLEFT", 10, -30)
@@ -318,19 +318,19 @@ box:SetHeight(22)
 
 box:SetTextInsets(6, 22, 0, 0)
 
-local placeholder = box:CreateFontString(nil, "OVERLAY", "VA_GameFontDisableSmall")
+local placeholder = box:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
 placeholder:SetPoint("LEFT", 7, 0)
 
 local clear = CreateFrame("Button", nil, box)
 clear:SetSize(20, 20)
 clear:SetPoint("RIGHT", -1, 0)
-clear:SetNormalFontObject("VA_GameFontDisable")
-clear:SetHighlightFontObject("VA_GameFontNormal")
+clear:SetNormalFontObject("MM_GameFontDisable")
+clear:SetHighlightFontObject("MM_GameFontNormal")
 clear:SetText("x")
 clear:Hide()
 clear:SetScript("OnClick", function() box:SetText("") end)
 
-local status = panel:CreateFontString(nil, "OVERLAY", "VA_GameFontDisableSmall")
+local status = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
 status:SetPoint("TOPLEFT", box, "BOTTOMLEFT", 2, -6)
 
 local tree = CreateFrame("Frame", nil, panel)
@@ -350,7 +350,7 @@ Fill(list, C.inset, 0.85)
 Outline(list, BORDER, 0.6)
 AddScrollbar(list)
 
-local empty = list:CreateFontString(nil, "OVERLAY", "VA_GameFontDisable")
+local empty = list:CreateFontString(nil, "OVERLAY", "MM_GameFontDisable")
 empty:SetPoint("CENTER")
 
 local newBtn = TextButton(panel, "New", 56)
@@ -368,7 +368,7 @@ editor:SetPoint("TOPLEFT", tree, "BOTTOMLEFT", 0, -6)
 editor:SetSize(TREE_W, 20)
 editor:Hide()
 
-local hint = panel:CreateFontString(nil, "OVERLAY", "VA_GameFontDisableSmall")
+local hint = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
 hint:SetPoint("BOTTOMLEFT", 10, 8)
 hint:SetPoint("RIGHT", -22, 0)
 hint:SetJustifyH("LEFT")
@@ -379,8 +379,8 @@ hint:SetText("Click: show on map   Drag onto category: add   Right-click: remove
 local miniClose = CreateFrame("Button", nil, panel)
 miniClose:SetSize(18, 18)
 miniClose:SetPoint("TOPRIGHT", -5, -6)
-miniClose:SetNormalFontObject("VA_GameFontHighlight")
-miniClose:SetHighlightFontObject("VA_GameFontNormal")
+miniClose:SetNormalFontObject("MM_GameFontHighlight")
+miniClose:SetHighlightFontObject("MM_GameFontNormal")
 miniClose:SetText("x")
 miniClose:SetScript("OnClick", function() panel:Hide() end)
 miniClose:Hide()
@@ -414,7 +414,7 @@ local treeRows, rows = {}, {}
 local function LowerName(itemID)
     local name = lowerNames[itemID]
     if not name then
-        name = strlower(VA.db.items[itemID].name or "")
+        name = strlower(MM.db.items[itemID].name or "")
         lowerNames[itemID] = name
     end
     return name
@@ -561,7 +561,7 @@ local function Matches(itemID, tokens)
     end
     if not missing then return true end
 
-    local set = VA.db.itemCats[itemID]
+    local set = MM.db.itemCats[itemID]
     if not set then return false end
     for path in pairs(set) do
         local lower, ok = LowerPath(path), true
@@ -601,14 +601,14 @@ end
 
 local servicePaths
 local function ServicePaths()
-    if not servicePaths and next(VA.services) then
+    if not servicePaths and next(MM.services) then
         servicePaths = {}
-        for _, npc in pairs(VA.services) do
+        for _, npc in pairs(MM.services) do
             for _, path in ipairs(npc.paths) do
                 local p = path
                 while p and not servicePaths[p] do
                     servicePaths[p] = true
-                    p = VA:ParentPath(p)
+                    p = MM:ParentPath(p)
                 end
             end
         end
@@ -670,15 +670,15 @@ end
 local function ServiceKey(id)
     if not IsGroup(id) then return id end
     local group = groups[id:sub(3)]
-    return group and VA:ClosestServiceKey(group)
+    return group and MM:ClosestServiceKey(group)
 end
 
 -- Category paths of shown service NPCs, grouped for the group rows
 local function BuildGroups()
     wipe(groups)
     wipe(groupSizes)
-    for key, npc in pairs(VA.services) do
-        if not (npc.unverified and VA.db.hideUnverified) then
+    for key, npc in pairs(MM.services) do
+        if not (npc.unverified and MM.db.hideUnverified) then
             for _, path in ipairs(npc.paths) do
                 local group = groups[path] or {}
                 groups[path] = group
@@ -693,7 +693,7 @@ end
 local function SortName(id)
     -- Nearest and All rows of a category stay together
     if IsGroup(id) then return strlower(id:sub(3)) .. (IsNearest(id) and "1" or "2") end
-    if IsService(id) then return strlower(VA.services[id].name) end
+    if IsService(id) then return strlower(MM.services[id].name) end
     return LowerName(id)
 end
 
@@ -760,11 +760,11 @@ end
 
 local function CategoryIcon(path)
     if iconCache[path] == nil then
-        local leaf, parent = path:match("[^/]+$"), VA:ParentPath(path)
+        local leaf, parent = path:match("[^/]+$"), MM:ParentPath(path)
         local spec = CATEGORY_ICONS[leaf]
         if parent and parent:match("/Classes$") then spec = ICONS .. "ClassIcon_" .. leaf end
         local icon = spec and IconOf(spec)
-            or (IsVirtual(path) and VA:ServiceIcon(path))
+            or (IsVirtual(path) and MM:ServiceIcon(path))
             or (parent and CategoryIcon(parent))
         iconCache[path] = icon or false
     end
@@ -790,7 +790,7 @@ local function SortedPaths(set)
 end
 
 local function BuildTree()
-    local db = VA.db
+    local db = MM.db
     wipe(nodes)
     nodes[1] = { path = ALL, label = "All items", depth = 0 }
 
@@ -798,15 +798,15 @@ local function BuildTree()
     for path in pairs(db.categories) do all[path] = true end
     for path in pairs(ServicePaths()) do all[path] = true end
     for path in pairs(all) do
-        local parent = VA:ParentPath(path)
+        local parent = MM:ParentPath(path)
         if parent then hasKids[parent] = true end
     end
 
     for _, path in ipairs(SortedPaths(all)) do
-        local hidden, parent = false, VA:ParentPath(path)
+        local hidden, parent = false, MM:ParentPath(path)
         while parent and not hidden do
             hidden = db.collapsed[parent]
-            parent = VA:ParentPath(parent)
+            parent = MM:ParentPath(parent)
         end
         if not hidden then
             local _, depth = path:gsub("/", "")
@@ -820,10 +820,10 @@ end
 local seen = {}
 
 local function CountItems()
-    local db = VA.db
+    local db = MM.db
     wipe(counts)
     for itemID, item in pairs(db.items) do
-        if VA:ItemVisible(item) then
+        if MM:ItemVisible(item) then
             counts[ALL] = (counts[ALL] or 0) + 1
             local set = db.itemCats[itemID]
             if set then
@@ -833,7 +833,7 @@ local function CountItems()
                     while p and not seen[p] do
                         seen[p] = true
                         counts[p] = (counts[p] or 0) + 1
-                        p = VA:ParentPath(p)
+                        p = MM:ParentPath(p)
                     end
                 end
             else
@@ -841,7 +841,7 @@ local function CountItems()
             end
         end
     end
-    for _, npc in pairs(VA.services) do
+    for _, npc in pairs(MM.services) do
         if not (npc.unverified and db.hideUnverified) then
             wipe(seen)
             for _, path in ipairs(npc.paths) do
@@ -849,7 +849,7 @@ local function CountItems()
                 while p and not seen[p] do
                     seen[p] = true
                     counts[p] = (counts[p] or 0) + 1
-                    p = VA:ParentPath(p)
+                    p = MM:ParentPath(p)
                 end
             end
         end
@@ -866,11 +866,11 @@ local function DrawTree()
             row.path = node.path
             row.toggle:SetPoint("LEFT", 2 + node.depth * 12, 0)
             row.toggle:SetShown(node.kids == true)
-            row.toggle:SetText(VA.db.collapsed[node.path] and "+" or "-")
+            row.toggle:SetText(MM.db.collapsed[node.path] and "+" or "-")
             row.label:SetText(node.label)
             row.icon:SetTexture(node.path == ALL and ICONS .. "INV_Misc_Bag_08"
                 or node.path == UNCAT and 134400 or CategoryIcon(node.path))
-            if VA:IsCategory(node.path) then
+            if MM:IsCategory(node.path) then
                 row.label:SetTextColor(CategoryColor(node.path, node.depth))
             else
                 row.label:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
@@ -884,7 +884,7 @@ local function DrawTree()
         end
     end
     UpdateScrollbar(tree, treeOffset, #nodes, TREE_ROWS)
-    local editable = VA:IsCategory(category) and not IsVirtual(category)
+    local editable = MM:IsCategory(category) and not IsVirtual(category)
     renameBtn:SetEnabled(editable)
     deleteBtn:SetEnabled(editable)
 end
@@ -896,12 +896,12 @@ local function DrawRows()
     for i, row in ipairs(rows) do
         local itemID = i <= ROWS and results[offset + i]
         local group = IsGroup(itemID)
-        local npc = itemID and not group and IsService(itemID) and VA.services[itemID]
-        local item = itemID and not npc and not group and VA.db.items[itemID]
+        local npc = itemID and not group and IsService(itemID) and MM.services[itemID]
+        local item = itemID and not npc and not group and MM.db.items[itemID]
         if group then
             local path = itemID:sub(3)
             local key = IsNearest(itemID) and ServiceKey(itemID)
-            local closest = key and VA.services[key]
+            local closest = key and MM.services[key]
             row.itemID = itemID
             row.icon:SetTexture(groupIcons[path] or 134400)
             row.name:SetText(GroupLabel(itemID))
@@ -911,7 +911,7 @@ local function DrawRows()
             elseif not closest then
                 row.info:SetText("Not on this continent")
             else
-                local zone = VA:ZoneName(closest)
+                local zone = MM:ZoneName(closest)
                 row.info:SetText(closest.unverified and ("|cffff5a4d" .. zone .. "|r") or zone)
             end
             row.sel:SetShown(itemID == selected)
@@ -923,7 +923,7 @@ local function DrawRows()
             local tag = npc.unverified and " |cffff5a4d?|r" or ""
             row.name:SetText(npc.name .. tag .. (npc.title and (" |cff8a8a8a<" .. npc.title .. ">|r") or ""))
             row.name:SetTextColor(0.55, 0.85, 0.9)
-            local zone = VA:ZoneName(npc)
+            local zone = MM:ZoneName(npc)
             row.info:SetText(npc.unverified and ("|cffff5a4d" .. zone .. "|r") or zone)
             row.sel:SetShown(itemID == selected)
             row:Show()
@@ -937,12 +937,12 @@ local function DrawRows()
 
             local count, onlyKey, verified = 0, nil, false
             for key, offer in pairs(item.vendors) do
-                if VA:OfferVisible(offer) then
+                if MM:OfferVisible(offer) then
                     count, onlyKey = count + 1, key
                     verified = verified or not offer.unverified
                 end
             end
-            local info = count == 1 and VA:ZoneName(VA.db.vendors[onlyKey] or {}) or (count .. " vendors")
+            local info = count == 1 and MM:ZoneName(MM.db.vendors[onlyKey] or {}) or (count .. " vendors")
             -- Items only known from Classic data are tagged red until a vendor confirms them
             row.info:SetText(verified and info or ("|cffff5a4d" .. info .. "|r"))
             if not verified then row.name:SetText(item.name .. " |cffff5a4d?|r") end
@@ -956,11 +956,11 @@ local function DrawRows()
     UpdateScrollbar(list, offset, #results, ROWS)
     -- Rows shift under a still cursor when scrolling or refreshing; re-aim the targeting
     for _, row in ipairs(rows) do
-        if VA:IsTargetOwner(row) then Row_Hover(row) end
+        if MM:IsTargetOwner(row) then Row_Hover(row) end
     end
 end
 
-function VA:RefreshList()
+function MM:RefreshList()
     if refreshTimer then
         refreshTimer:Cancel()
         refreshTimer = nil
@@ -998,7 +998,7 @@ function VA:RefreshList()
     if not low and (query ~= "" or IsVirtual(cat)) then
         BuildGroups()
         local paths = {}
-        for key, npc in pairs(VA.services) do
+        for key, npc in pairs(MM.services) do
             if not (npc.unverified and db.hideUnverified) and ServiceInCategory(npc, cat)
                 and (query == "" or ServiceMatches(npc, tokens)) then
                 results[#results + 1] = key
@@ -1076,7 +1076,7 @@ end
 
 -- Scans and auto-categorizing can fire in bursts, so refresh at most every quarter second
 local dataTimer
-function VA:OnDataChanged()
+function MM:OnDataChanged()
     MarkDirty()
     servicePaths = nil -- a newly found NPC can bring a new Services category
     wipe(lowerNames)
@@ -1084,26 +1084,26 @@ function VA:OnDataChanged()
     dataTimer = C_Timer.NewTimer(0.25, function()
         dataTimer = nil
         if panel:IsShown() then
-            VA:RefreshList()
+            MM:RefreshList()
         else
-            VA:RefreshMap()
+            MM:RefreshMap()
         end
     end)
 end
 
-function VA:Toggle()
+function MM:Toggle()
     panel:SetShown(not panel:IsShown())
 end
 
--- /va <words>: opens the window searching all items and services for them
-function VA:Search(text)
+-- /mm <words>: opens the window searching all items and services for them
+function MM:Search(text)
     panel:Show()
     if category ~= ALL then
         category, offset = ALL, 0
         MarkDirty()
     end
     box:SetText(text)
-    VA:RefreshList()
+    MM:RefreshList()
 
     -- A search for one kind of service goes straight to the nearest one, like clicking its "Nearest" row
     local nearest
@@ -1116,27 +1116,27 @@ function VA:Search(text)
     local key = nearest and ServiceKey(nearest)
     if key then
         selected = nearest
-        VA:ShowServiceOnMap(key)
-        VA:RefreshList()
+        MM:ShowServiceOnMap(key)
+        MM:RefreshList()
     end
 end
 
 -- Category tree -----------------------------------------------------------
 
 local function ExpandTo(path)
-    local parent = VA:ParentPath(path)
+    local parent = MM:ParentPath(path)
     while parent do
-        VA.db.collapsed[parent] = nil
-        parent = VA:ParentPath(parent)
+        MM.db.collapsed[parent] = nil
+        parent = MM:ParentPath(parent)
     end
 end
 
 local function SelectCategory(path)
-    if path ~= category or selected then VA:ClearMinimapVendor() end
+    if path ~= category or selected then MM:ClearMinimapVendor() end
     category, selected, offset = path, nil, 0
     box:SetText("")
-    VA:RefreshList()
-    VA:FitMapToActive()
+    MM:RefreshList()
+    MM:FitMapToActive()
 end
 
 local function Node_OnClick(self)
@@ -1145,9 +1145,9 @@ end
 
 local function Toggle_OnClick(self)
     local path = self:GetParent().path
-    VA.db.collapsed[path] = not VA.db.collapsed[path] or nil
+    MM.db.collapsed[path] = not MM.db.collapsed[path] or nil
     treeDirty = true
-    VA:RefreshList()
+    MM:RefreshList()
 end
 
 local function CreateTreeRow(i)
@@ -1166,12 +1166,12 @@ local function CreateTreeRow(i)
 
     row.toggle = CreateFrame("Button", nil, row)
     row.toggle:SetSize(16, ROW_H)
-    row.toggle:SetNormalFontObject("VA_GameFontDisableLarge")
-    row.toggle:SetHighlightFontObject("VA_GameFontNormalLarge")
+    row.toggle:SetNormalFontObject("MM_GameFontDisableLarge")
+    row.toggle:SetHighlightFontObject("MM_GameFontNormalLarge")
     row.toggle:SetText("-")
     row.toggle:SetScript("OnClick", Toggle_OnClick)
 
-    row.count = row:CreateFontString(nil, "OVERLAY", "VA_GameFontDisableSmall")
+    row.count = row:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
     row.count:SetPoint("RIGHT", -4, 0)
 
     row.icon = row:CreateTexture(nil, "ARTWORK")
@@ -1179,7 +1179,7 @@ local function CreateTreeRow(i)
     row.icon:SetPoint("LEFT", row.toggle, "RIGHT", 1, 0)
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
-    row.label = row:CreateFontString(nil, "OVERLAY", "VA_GameFontHighlightSmall")
+    row.label = row:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
     row.label:SetPoint("LEFT", row.icon, "RIGHT", 4, 0)
     row.label:SetPoint("RIGHT", row.count, "LEFT", -4, 0)
     row.label:SetJustifyH("LEFT")
@@ -1204,14 +1204,14 @@ local function CloseEditor()
     editMode = nil
     editor:ClearFocus()
     editor:Hide()
-    local full = not VA.db.compact
+    local full = not MM.db.compact
     newBtn:SetShown(full)
     renameBtn:SetShown(full)
     deleteBtn:SetShown(full)
 end
 
 newBtn:SetScript("OnClick", function()
-    OpenEditor("new", VA:IsCategory(category) and (category .. "/") or "")
+    OpenEditor("new", MM:IsCategory(category) and (category .. "/") or "")
 end)
 
 renameBtn:SetScript("OnClick", function()
@@ -1220,7 +1220,7 @@ end)
 
 deleteBtn:SetScript("OnClick", function()
     if not IsShiftKeyDown() then return end
-    VA:DeleteCategory(category)
+    MM:DeleteCategory(category)
     MarkDirty()
     SelectCategory(ALL)
 end)
@@ -1229,9 +1229,9 @@ editor:SetScript("OnEnterPressed", function(self)
     local text = self:GetText()
     local path
     if editMode == "new" then
-        path = VA:AddCategory(text)
+        path = MM:AddCategory(text)
     elseif editMode == "rename" then
-        path = VA:RenameCategory(category, text)
+        path = MM:RenameCategory(category, text)
     end
     CloseEditor()
     if path then
@@ -1267,12 +1267,12 @@ local function Row_OnEnter(self)
     if IsService(self.itemID) then
         local key = ServiceKey(self.itemID)
         if not key or dragIcon:IsShown() then return end
-        VA:ShowServiceTooltip(self, key, nil, "ANCHOR_NONE")
+        MM:ShowServiceTooltip(self, key, nil, "ANCHOR_NONE")
         GameTooltip:ClearAllPoints()
         GameTooltip:SetPoint("TOPRIGHT", panel, "BOTTOMRIGHT", 0, -4)
         return
     end
-    local item = VA.db.items[self.itemID]
+    local item = MM.db.items[self.itemID]
     if not item or dragIcon:IsShown() then return end
     -- Below the window, right-aligned, so comparison tooltips don't cover it
     GameTooltip:SetOwner(self, "ANCHOR_NONE")
@@ -1283,10 +1283,10 @@ local function Row_OnEnter(self)
 
     local keys, where, unverified = {}, {}, false
     for key, offer in pairs(item.vendors) do
-        local vendor = VA.db.vendors[key]
-        if vendor and VA:OfferVisible(offer) then
+        local vendor = MM.db.vendors[key]
+        if vendor and MM:OfferVisible(offer) then
             keys[#keys + 1] = key
-            where[key] = VA:LocationText(vendor)
+            where[key] = MM:LocationText(vendor)
         end
     end
     table.sort(keys, function(a, b) return where[a] < where[b] end)
@@ -1295,17 +1295,17 @@ local function Row_OnEnter(self)
             GameTooltip:AddLine(("... and %d more"):format(#keys - MAX_TOOLTIP_VENDORS), 0.6, 0.6, 0.6)
             break
         end
-        local vendor = VA.db.vendors[key]
+        local vendor = MM.db.vendors[key]
         local g = vendor.unverified and 0.35 or 1
         GameTooltip:AddDoubleLine(vendor.name .. " |cff999999" .. where[key] .. "|r",
-            VA:PriceText(item.vendors[key]), 1, g, g, 1, 1, 1)
+            MM:PriceText(item.vendors[key]), 1, g, g, 1, 1, 1)
         unverified = unverified or vendor.unverified
     end
     if unverified then
         GameTooltip:AddLine("Red vendors are from Classic and may have changed. Visit them to confirm.", 0.6, 0.6, 0.6, true)
     end
 
-    local set = VA.db.itemCats[self.itemID]
+    local set = MM.db.itemCats[self.itemID]
     if set then
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Categories:", ACCENT[1], ACCENT[2], ACCENT[3])
@@ -1322,15 +1322,15 @@ removeBtn:SetHeight(22)
 removeBtn:SetFrameStrata("TOOLTIP")
 removeBtn:Hide()
 SkinButton(removeBtn)
-removeBtn.label = removeBtn:CreateFontString(nil, "OVERLAY", "VA_GameFontHighlightSmall")
+removeBtn.label = removeBtn:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
 removeBtn.label:SetPoint("CENTER")
 
 removeBtn:SetScript("OnClick", function(self)
     self:Hide()
-    VA:UnassignItem(self.itemID, ActiveCategory())
+    MM:UnassignItem(self.itemID, ActiveCategory())
     countsDirty = true
     if selected == self.itemID then selected = nil end
-    VA:RefreshList()
+    MM:RefreshList()
 end)
 -- Closes on any click elsewhere, or when the window closes
 removeBtn:SetScript("OnShow", function(self) self:RegisterEvent("GLOBAL_MOUSE_DOWN") end)
@@ -1359,57 +1359,57 @@ local function Row_OnClick(self, button)
         if IsModifiedClick() then return end
         if button == "RightButton" or selected == itemID then
             selected = nil
-            VA:ClearMinimapVendor()
-            VA:RefreshList()
-            VA:FitMapToActive()
+            MM:ClearMinimapVendor()
+            MM:RefreshList()
+            MM:FitMapToActive()
             return
         else
             selected = itemID
             local key = ServiceKey(itemID)
             if IsGroup(itemID) and not IsNearest(itemID) then
-                VA:ShowServicesOnMap(groups[itemID:sub(3)])
+                MM:ShowServicesOnMap(groups[itemID:sub(3)])
             elseif key then
-                VA:ShowServiceOnMap(key)
+                MM:ShowServiceOnMap(key)
             end
         end
-        VA:RefreshList()
+        MM:RefreshList()
         return
     end
 
     if IsModifiedClick() then
-        local link = VA.db.items[itemID].link or select(2, C_Item.GetItemInfo(itemID))
+        local link = MM.db.items[itemID].link or select(2, C_Item.GetItemInfo(itemID))
         if link then HandleModifiedItemClick(link) end
         return
     end
 
     if button == "RightButton" then
-        if VA:IsCategory(ActiveCategory()) then
+        if MM:IsCategory(ActiveCategory()) then
             ShowRemoveButton(itemID)
             return
         end
         selected = nil
-        VA:ClearMinimapVendor()
-        VA:RefreshList()
-        VA:FitMapToActive()
+        MM:ClearMinimapVendor()
+        MM:RefreshList()
+        MM:FitMapToActive()
         return
     elseif selected == itemID then
         selected = nil
-        VA:ClearMinimapVendor()
-        VA:RefreshList()
-        VA:FitMapToActive()
+        MM:ClearMinimapVendor()
+        MM:RefreshList()
+        MM:FitMapToActive()
         return
     else
         selected = itemID
-        VA:ShowItemOnMap(itemID)
+        MM:ShowItemOnMap(itemID)
     end
-    VA:RefreshList()
+    MM:RefreshList()
 end
 
 local function Row_OnDragStart(self)
     if not self.itemID or IsService(self.itemID) then return end
     GameTooltip:Hide()
     dragIcon.itemID = self.itemID
-    dragIcon.tex:SetTexture(VA.db.items[self.itemID].icon or 134400)
+    dragIcon.tex:SetTexture(MM.db.items[self.itemID].icon or 134400)
     dragIcon:Show()
 end
 
@@ -1417,11 +1417,11 @@ local function Row_OnDragStop()
     dragIcon:Hide()
     if not dragIcon.itemID then return end
     for _, node in ipairs(treeRows) do
-        if node:IsVisible() and node.path and VA:IsCategory(node.path) and not IsVirtual(node.path)
+        if node:IsVisible() and node.path and MM:IsCategory(node.path) and not IsVirtual(node.path)
             and node:IsMouseOver() then
-            VA:AssignItem(dragIcon.itemID, node.path)
+            MM:AssignItem(dragIcon.itemID, node.path)
             countsDirty = true
-            VA:RefreshList()
+            MM:RefreshList()
             break
         end
     end
@@ -1447,12 +1447,12 @@ function Row_Hover(self)
     local vendor
     if IsService(self.itemID) then
         local key = ServiceKey(self.itemID)
-        vendor = key and VA.services[key]
+        vendor = key and MM.services[key]
     else
-        local key = VA:ClosestVendorKey(self.itemID)
-        vendor = key and VA.db.vendors[key]
+        local key = MM:ClosestVendorKey(self.itemID)
+        vendor = key and MM.db.vendors[key]
     end
-    VA:AttachTargetButton(self, {
+    MM:AttachTargetButton(self, {
         name = vendor and vendor.name or false,
         rightClick = true,
         onEnter = Row_Enter,
@@ -1486,11 +1486,11 @@ local function CreateItemRow(i)
     row.icon:SetPoint("LEFT", 4, 0)
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
-    row.info = row:CreateFontString(nil, "OVERLAY", "VA_GameFontDisableSmall")
+    row.info = row:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
     row.info:SetPoint("RIGHT", -4, 0)
     row.info:SetJustifyH("RIGHT")
 
-    row.name = row:CreateFontString(nil, "OVERLAY", "VA_GameFontHighlightSmall")
+    row.name = row:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
     row.name:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
     row.name:SetPoint("RIGHT", row.info, "LEFT", -8, 0)
     row.name:SetJustifyH("LEFT")
@@ -1498,7 +1498,7 @@ local function CreateItemRow(i)
 
     row:SetScript("OnEnter", Row_Hover)
     row:SetScript("OnLeave", function(self)
-        if not VA:IsTargetOwner(self) then Row_Leave(self) end
+        if not MM:IsTargetOwner(self) then Row_Leave(self) end
     end)
     row:SetScript("OnClick", Row_OnClick)
     row:SetScript("OnDragStart", Row_OnDragStart)
@@ -1518,10 +1518,10 @@ end
 -- Panel -------------------------------------------------------------------
 
 unverifiedBtn:SetScript("OnClick", function()
-    VA.db.hideUnverified = not VA.db.hideUnverified or nil
+    MM.db.hideUnverified = not MM.db.hideUnverified or nil
     selected = nil
     countsDirty = true
-    VA:RefreshList()
+    MM:RefreshList()
 end)
 
 -- Items whose required level was still loading show up once it arrives
@@ -1531,7 +1531,7 @@ levelEvents:SetScript("OnEvent", function(_, _, itemID)
     if not pendingLevels[itemID] then return end
     pendingLevels[itemID] = nil
     if panel:IsShown() and not refreshTimer then
-        refreshTimer = C_Timer.NewTimer(0.2, function() VA:RefreshList() end)
+        refreshTimer = C_Timer.NewTimer(0.2, function() MM:RefreshList() end)
     end
 end)
 
@@ -1543,7 +1543,7 @@ box:SetScript("OnTextChanged", function(self)
     clear:SetShown(self:GetText() ~= "")
     selected, offset = nil, 0
     if refreshTimer then refreshTimer:Cancel() end
-    refreshTimer = C_Timer.NewTimer(0.12, function() VA:RefreshList() end)
+    refreshTimer = C_Timer.NewTimer(0.12, function() MM:RefreshList() end)
 end)
 box:SetScript("OnEscapePressed", box.ClearFocus)
 box:SetScript("OnEnterPressed", box.ClearFocus)
@@ -1564,11 +1564,11 @@ list:SetScript("OnSizeChanged", Relayout)
 -- Every category starts folded the first time the window opens each session
 local foldedThisSession
 local function FoldAll()
-    local collapsed = VA.db.collapsed
+    local collapsed = MM.db.collapsed
     wipe(collapsed)
-    for _, set in ipairs({ VA.db.categories, ServicePaths() }) do
+    for _, set in ipairs({ MM.db.categories, ServicePaths() }) do
         for path in pairs(set) do
-            local parent = VA:ParentPath(path)
+            local parent = MM:ParentPath(path)
             if parent then collapsed[parent] = true end
         end
     end
@@ -1579,7 +1579,7 @@ end
 local fullOnly = { header, status, tree, newBtn, renameBtn, deleteBtn, hint }
 
 local function ApplyMode()
-    local compact = VA.db.compact
+    local compact = MM.db.compact
     for _, f in ipairs(fullOnly) do f:SetShown(not compact) end
     miniClose:SetShown(compact == true)
     expandBtn:SetShown(compact == true)
@@ -1601,14 +1601,14 @@ local function ApplyMode()
 end
 
 local function ApplySize()
-    local db = VA.db
+    local db = MM.db
     local size = db.compact and (db.compactSize or DEFAULT_COMPACT) or (db.size or DEFAULT_FULL)
     panel:SetSize(size[1], size[2])
 end
 
 local function SetCompact(on)
     SaveGeometry()
-    VA.db.compact = on or nil
+    MM.db.compact = on or nil
     -- Keep the top left corner where it is while the size changes
     local left, top = panel:GetLeft(), panel:GetTop()
     panel:ClearAllPoints()
@@ -1618,14 +1618,14 @@ local function SetCompact(on)
     ApplySize()
     SaveGeometry()
     Relayout()
-    VA:RefreshList()
+    MM:RefreshList()
 end
 
 compactBtn:SetScript("OnClick", function() SetCompact(true) end)
 expandBtn:SetScript("OnClick", function() SetCompact(false) end)
 
 panel:SetScript("OnShow", function()
-    local db = VA.db
+    local db = MM.db
     ApplyMode()
     ApplySize()
     local p = db.point
@@ -1639,7 +1639,7 @@ panel:SetScript("OnShow", function()
     end
     CloseEditor()
     Relayout()
-    VA:RefreshList()
+    MM:RefreshList()
 end)
 
 panel:SetScript("OnHide", function()
@@ -1647,40 +1647,40 @@ panel:SetScript("OnHide", function()
     dragIcon.itemID = nil
     box:ClearFocus()
     CloseEditor()
-    VA.activeVendors = nil
-    VA:RefreshMap()
+    MM.activeVendors = nil
+    MM:RefreshMap()
 end)
 
-SLASH_VENDORATLAS1 = "/va"
-SLASH_VENDORATLAS2 = "/vendoratlas"
-SlashCmdList.VENDORATLAS = function(input)
+SLASH_MERCHANTMAP1 = "/mm"
+SLASH_MERCHANTMAP2 = "/merchantmap"
+SlashCmdList.MERCHANTMAP = function(input)
     input = strtrim(input or "")
     local msg = strlower(input)
     if msg == "debug" then
-        VA.debug = not VA.debug
-        print(("|cffccb084Vendor Atlas:|r targeting debug %s."):format(VA.debug and "on" or "off"))
+        MM.debug = not MM.debug
+        print(("|cffccb084Merchant Map:|r targeting debug %s."):format(MM.debug and "on" or "off"))
     elseif msg == "minimap" then
-        VA:SetMinimapButtonShown(true)
+        MM:SetMinimapButtonShown(true)
     elseif msg == "unverified" then
-        VA.verifyMode = not VA.verifyMode or nil
-        VA:RefreshMap()
-        VA:PointToNextUnverified()
-        print(("|cffccb084Vendor Atlas:|r map shows %s."):format(
-            VA.verifyMode and "only NPCs you still need to talk to" or "your usual pins again"))
+        MM.verifyMode = not MM.verifyMode or nil
+        MM:RefreshMap()
+        MM:PointToNextUnverified()
+        print(("|cffccb084Merchant Map:|r map shows %s."):format(
+            MM.verifyMode and "only NPCs you still need to talk to" or "your usual pins again"))
     elseif msg == "next" then
-        VA:PointToNextUnverified()
+        MM:PointToNextUnverified()
     elseif msg == "skip" then
-        VA:SkipUnverified()
+        MM:SkipUnverified()
     elseif msg == "arrow" then
-        VA:ToggleArrow()
+        MM:ToggleArrow()
     elseif msg == "share" then
-        VA:ToggleShare()
+        MM:ToggleShare()
     elseif msg == "auto" then
-        local count = VA:AutoCategorizeUncategorized()
-        print(("|cffccb084Vendor Atlas:|r auto-categorizing %d uncategorized items."):format(count))
+        local count = MM:AutoCategorizeUncategorized()
+        print(("|cffccb084Merchant Map:|r auto-categorizing %d uncategorized items."):format(count))
     elseif msg ~= "" then
-        VA:Search(input)
+        MM:Search(input)
     else
-        VA:Toggle()
+        MM:Toggle()
     end
 end

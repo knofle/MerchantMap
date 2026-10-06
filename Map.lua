@@ -1,4 +1,4 @@
-local _, VA = ...
+local _, MM = ...
 
 local MAX_TOOLTIP_ITEMS = 30
 
@@ -63,10 +63,10 @@ end
 
 -- Pin styling and actions -------------------------------------------------------
 
-local PIN = "VendorAtlasPinTemplate"
+local PIN = "MerchantMapPinTemplate"
 local CIRCLE = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local COIN = "Interface\\MoneyFrame\\UI-GoldIcon"
-local C = VA.COLORS
+local C = MM.COLORS
 local ACCENT, BORDER = C.accent, C.border
 
 local PIN_STYLES = {
@@ -99,7 +99,7 @@ end
 local function PinAction(frame)
     if IsAltKeyDown() then
         local hide = frame.state ~= "hidden"
-        VA.db.hiddenVendors[frame.key] = hide or nil
+        MM.db.hiddenVendors[frame.key] = hide or nil
         GameTooltip:Hide()
         -- Stack list rows update in place so the list stays open
         if frame.name then
@@ -109,10 +109,10 @@ local function PinAction(frame)
                 or (v.unverified and "unvisited" or "visited")
             StyleRow(frame)
         end
-        VA:RefreshMap()
+        MM:RefreshMap()
         return true
     elseif IsShiftKeyDown() then
-        VA:SetWaypoint(frame.vendor)
+        MM:SetWaypoint(frame.vendor)
         if spread then spread:Hide() end
         return true
     end
@@ -153,7 +153,7 @@ local function SolidBox(frame, alpha)
     local grain = frame:CreateTexture(nil, "BORDER", nil, 1)
     grain:SetPoint("TOPLEFT", 1, -1)
     grain:SetPoint("BOTTOMRIGHT", -1, 1)
-    grain:SetTexture(VA.GRAIN, "REPEAT", "REPEAT")
+    grain:SetTexture(MM.GRAIN, "REPEAT", "REPEAT")
     grain:SetHorizTile(true)
     grain:SetVertTile(true)
     grain:SetAlpha(0.35)
@@ -168,15 +168,15 @@ local function CreateSpread()
     spread:Hide()
     SolidBox(spread, 0.95)
 
-    spread.header = spread:CreateFontString(nil, "OVERLAY", "VA_GameFontNormalSmall")
+    spread.header = spread:CreateFontString(nil, "OVERLAY", "MM_GameFontNormalSmall")
     spread.header:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
     spread.header:SetPoint("TOPLEFT", 8, -7)
 
     local close = CreateFrame("Button", nil, spread)
     close:SetSize(18, 18)
     close:SetPoint("TOPRIGHT", -3, -3)
-    close:SetNormalFontObject("VA_GameFontDisable")
-    close:SetHighlightFontObject("VA_GameFontNormal")
+    close:SetNormalFontObject("MM_GameFontDisable")
+    close:SetHighlightFontObject("MM_GameFontNormal")
     close:SetText("x")
     close:SetScript("OnClick", function() spread:Hide() end)
 
@@ -186,7 +186,7 @@ local function CreateSpread()
     line:SetPoint("TOPLEFT", 6, -22)
     line:SetPoint("TOPRIGHT", -6, -22)
 
-    local footer = spread:CreateFontString(nil, "OVERLAY", "VA_GameFontDisableSmall")
+    local footer = spread:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
     footer:SetPoint("BOTTOMLEFT", 8, 7)
     footer:SetText("Shift-click: waypoint    Alt-click: hide")
 
@@ -248,8 +248,8 @@ end
 local function TargetMacro(name)
     local macro = "/cleartarget\n/targetexact " .. name
     -- Option: target only, without a raid marker
-    if lastMarked == name or VA.db.noRaidMarker then return macro end
-    macro = macro .. "\n/tm [@target,exists] " .. (VA.db.raidMarker or 8)
+    if lastMarked == name or MM.db.noRaidMarker then return macro end
+    macro = macro .. "\n/tm [@target,exists] " .. (MM.db.raidMarker or 8)
     if lastMarked then
         macro = macro .. "\n/stopmacro [@target,exists]\n/targetexact " .. lastMarked
             .. "\n/tm [@target,exists] 0\n/cleartarget"
@@ -272,9 +272,9 @@ function AimButton(b)
     b:SetAttribute("macrotext2", b.rightMacro)
 end
 
--- /va debug prints what the targeting sees, to track down skull problems
+-- /mm debug prints what the targeting sees, to track down skull problems
 local function Debug(...)
-    if VA.debug then print("|cffccb084VA debug:|r", ...) end
+    if MM.debug then print("|cffccb084VA debug:|r", ...) end
 end
 
 local markEvents = CreateFrame("Frame")
@@ -304,7 +304,7 @@ end
 
 local function TargetButton()
     if targetButton then return targetButton end
-    local b = CreateFrame("Button", "VendorAtlasTargetButton", UIParent, "SecureActionButtonTemplate")
+    local b = CreateFrame("Button", "MerchantMapTargetButton", UIParent, "SecureActionButtonTemplate")
     b:SetFrameStrata("TOOLTIP")
     -- Secure buttons only act on the press or the release, depending on the "cast on key down"
     -- setting, so register both and ask for the release
@@ -320,7 +320,7 @@ local function TargetButton()
         Debug("click", button, down and "down" or "up", "shown macro:", ((self:GetAttribute("macrotext") or ""):gsub("\n", " | ")))
         if down then return end
         if button == "LeftButton" and self.targetName and self.targetName ~= lastMarked
-            and not VA.db.noRaidMarker and not (IsShiftKeyDown() or IsAltKeyDown() or IsControlKeyDown()) then
+            and not MM.db.noRaidMarker and not (IsShiftKeyDown() or IsAltKeyDown() or IsControlKeyDown()) then
             RememberMark(self.targetName)
         end
         local opts = self.opts
@@ -329,9 +329,9 @@ local function TargetButton()
             opts.onClick(self.owner, button)
         elseif button == "RightButton" then
             -- Right-click clears the minimap marker; elsewhere it zooms the map out as usual
-            if self.owner.key == VA.minimapKey then
+            if self.owner.key == MM.minimapKey then
                 if self.rightMacro then lastMarked = nil end
-                VA:ClearMinimapVendor()
+                MM:ClearMinimapVendor()
             else
                 WorldMapFrame:NavigateToParentMap()
             end
@@ -339,7 +339,7 @@ local function TargetButton()
             -- Step aside after shift/alt actions; the frame underneath re-attaches on hover
             self:Hide()
         else
-            VA:SetMinimapVendor(self.owner.vendor, self.owner.key)
+            MM:SetMinimapVendor(self.owner.vendor, self.owner.key)
         end
     end)
     -- Owner callbacks; map pins don't need them since the hover tracker handles them
@@ -439,13 +439,13 @@ local function SpreadRow(i)
     row.Icon:SetPoint("CENTER", row.Ring)
     row.Icon:SetTexture(COIN)
 
-    row.title = row:CreateFontString(nil, "OVERLAY", "VA_GameFontDisableSmall")
+    row.title = row:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
     row.title:SetPoint("RIGHT", -6, 0)
     row.title:SetWidth(90)
     row.title:SetJustifyH("RIGHT")
     row.title:SetWordWrap(false)
 
-    row.name = row:CreateFontString(nil, "OVERLAY", "VA_GameFontHighlightSmall")
+    row.name = row:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
     row.name:SetPoint("LEFT", row.Ring, "RIGHT", 6, 0)
     row.name:SetPoint("RIGHT", row.title, "LEFT", -6, 0)
     row.name:SetJustifyH("LEFT")
@@ -455,7 +455,7 @@ local function SpreadRow(i)
         hl:Show()
         accent:Show()
         HighlightPin(row.key, true)
-        VA:ShowVendorTooltip(row, row.key)
+        MM:ShowVendorTooltip(row, row.key)
     end
     local function Leave()
         hl:Hide()
@@ -499,9 +499,9 @@ end
 
 -- Pin -------------------------------------------------------------------------
 
-VendorAtlasPinMixin = CreateFromMixins(MapCanvasPinMixin)
+MerchantMapPinMixin = CreateFromMixins(MapCanvasPinMixin)
 
-function VendorAtlasPinMixin:OnLoad()
+function MerchantMapPinMixin:OnLoad()
     self:UseFrameLevelType("PIN_FRAME_LEVEL_VIGNETTE")
     self:SetScalingLimits(1, 1.0, 1.3)
     self.Disc:SetVertexColor(0.05, 0.05, 0.07, 0.9)
@@ -524,7 +524,7 @@ local function PinAlpha(pin)
     return PIN_STYLES[pin.state].alpha
 end
 
-function VendorAtlasPinMixin:OnAcquired(key, vendor, state, x, y)
+function MerchantMapPinMixin:OnAcquired(key, vendor, state, x, y)
     self.key, self.vendor, self.state, self.baseLevel = key, vendor, state, nil
     -- Services show their own icon (trainer, flight master...), vendors the coin
     self.Icon:SetTexture(vendor.icon or COIN)
@@ -532,7 +532,7 @@ function VendorAtlasPinMixin:OnAcquired(key, vendor, state, x, y)
     ApplyStyle(self, state)
     self:SetAlpha(PinAlpha(self))
     self.Hover:Hide()
-    self.Marked:SetShown(key == VA.minimapKey)
+    self.Marked:SetShown(key == MM.minimapKey)
     self:SetPosition(x, y)
 end
 
@@ -578,12 +578,12 @@ local function SetHovered(pin)
 
     RaisePin(pin, true)
     local stacked = #OverlappingPins(pin)
-    VA:ShowVendorTooltip(pin, pin.key, stacked)
+    MM:ShowVendorTooltip(pin, pin.key, stacked)
     -- Stacked pins keep their plain click for the overlap list
     if stacked == 1 then
         AttachTargetButton(pin, {
             rightClick = true,
-            unmarkName = pin.key == VA.minimapKey and pin.vendor.name or nil,
+            unmarkName = pin.key == MM.minimapKey and pin.vendor.name or nil,
         })
     else
         HideTargetButton()
@@ -606,32 +606,32 @@ tracker:SetScript("OnUpdate", function(_, dt)
     if hovered and IsTargetOwner(hovered) and not InCombatLockdown() then PlaceTargetButton(hovered) end
 end)
 
-function VendorAtlasPinMixin:OnMouseEnter()
+function MerchantMapPinMixin:OnMouseEnter()
     SetHovered(NearestPin() or self)
 end
 
-function VendorAtlasPinMixin:OnMouseLeave()
+function MerchantMapPinMixin:OnMouseLeave()
     -- The tracker notices when the cursor leaves all pins
 end
 
 -- The map canvas owns the pin's mouse scripts and forwards to these methods
 -- The map gives each pin its own frame level and reassigns them at times;
 -- the minimap vendor is always lifted above the rest
-function VendorAtlasPinMixin:ApplyFrameLevel()
+function MerchantMapPinMixin:ApplyFrameLevel()
     if MapCanvasPinMixin.ApplyFrameLevel then MapCanvasPinMixin.ApplyFrameLevel(self) end
-    if self.key == VA.minimapKey then
+    if self.key == MM.minimapKey then
         self:SetFrameLevel(math.max(self:GetFrameLevel(), topPinLevel + 1))
     end
 end
 
 -- Right-click passes through to the map (zoom out), except on the minimap vendor's pin
-function VendorAtlasPinMixin:ShouldMouseButtonBePassthrough(button)
-    return button == "RightButton" and self.key ~= VA.minimapKey
+function MerchantMapPinMixin:ShouldMouseButtonBePassthrough(button)
+    return button == "RightButton" and self.key ~= MM.minimapKey
 end
 
-function VendorAtlasPinMixin:OnMouseClickAction(button)
+function MerchantMapPinMixin:OnMouseClickAction(button)
     if button == "RightButton" then
-        if self.key == VA.minimapKey then VA:ClearMinimapVendor() end
+        if self.key == MM.minimapKey then MM:ClearMinimapVendor() end
         return
     end
     if button ~= "LeftButton" or PinAction(self) then return end
@@ -654,28 +654,28 @@ end
 local function VendorItems(key, vendor)
     local ids = {}
     for itemID in pairs(vendor.items) do
-        local item = VA.db.items[itemID]
+        local item = MM.db.items[itemID]
         if item and item.vendors[key] then ids[#ids + 1] = itemID end
     end
-    table.sort(ids, function(a, b) return VA.db.items[a].name < VA.db.items[b].name end)
+    table.sort(ids, function(a, b) return MM.db.items[a].name < MM.db.items[b].name end)
     return ids
 end
 
 local function PinState(key, vendor)
-    if VA.db.hiddenVendors[key] then return "hidden" end
+    if MM.db.hiddenVendors[key] then return "hidden" end
     if vendor.service then return vendor.unverified and "serviceUnverified" or "service" end
     return vendor.unverified and "unvisited" or "visited"
 end
 
 -- Search results or all visited vendors (Vendors), plus unvisited (Unvisited Vendors) and hidden (Show hidden)
--- /va unverified: only the vendors and service NPCs you still need to talk to
+-- /mm unverified: only the vendors and service NPCs you still need to talk to
 local function UnverifiedNPCs()
-    local db = VA.db
+    local db = MM.db
     local pinned = {}
     for key, vendor in pairs(db.vendors) do
         if vendor.unverified and not vendor.located then pinned[key] = true end
     end
-    for key, npc in pairs(VA.services) do
+    for key, npc in pairs(MM.services) do
         if npc.unverified then pinned[key] = true end
     end
     for key in pairs(pinned) do
@@ -685,18 +685,18 @@ local function UnverifiedNPCs()
 end
 
 local function PinnedVendors()
-    local db = VA.db
+    local db = MM.db
     local pinned = {}
-    if VA.verifyMode then
+    if MM.verifyMode then
         pinned = UnverifiedNPCs()
-        if VA.minimapKey and VA:GetNPC(VA.minimapKey) then pinned[VA.minimapKey] = true end
+        if MM.minimapKey and MM:GetNPC(MM.minimapKey) then pinned[MM.minimapKey] = true end
         return pinned
     end
-    for key, ids in pairs(VA.activeVendors or {}) do pinned[key] = ids end
+    for key, ids in pairs(MM.activeVendors or {}) do pinned[key] = ids end
     for key, vendor in pairs(db.vendors) do
         local state = PinState(key, vendor)
         -- While searching, only vendors selling the matched items are pinned
-        local wanted = not VA.activeVendors and ((state == "visited" and db.showAllVendors)
+        local wanted = not MM.activeVendors and ((state == "visited" and db.showAllVendors)
             or (state == "unvisited" and db.showUnvisited)
             or (state == "hidden" and db.showHidden))
         if wanted and not pinned[key] then
@@ -713,8 +713,8 @@ local function PinnedVendors()
         end
     end
     -- The vendor on the minimap always shows, whatever the toggles
-    local marked = VA.minimapKey
-    if marked and VA:GetNPC(marked) and not pinned[marked] then pinned[marked] = true end
+    local marked = MM.minimapKey
+    if marked and MM:GetNPC(marked) and not pinned[marked] then pinned[marked] = true end
     return pinned
 end
 
@@ -729,9 +729,9 @@ function Provider:RefreshAllData()
     local map = self:GetMap()
     local mapID = map:GetMapID()
 
-    VA.pinned = PinnedVendors()
-    for key in pairs(VA.pinned) do
-        local vendor = VA:GetNPC(key)
+    MM.pinned = PinnedVendors()
+    for key in pairs(MM.pinned) do
+        local vendor = MM:GetNPC(key)
         local x, y
         if vendor then x, y = PosOnMap(vendor, mapID) end
         if x and x >= 0 and x <= 1 and y >= 0 and y <= 1 then
@@ -743,7 +743,7 @@ function Provider:RefreshAllData()
     local marked
     topPinLevel = 0
     for pin in map:EnumeratePinsByTemplate(PIN) do
-        if pin.key == VA.minimapKey then
+        if pin.key == MM.minimapKey then
             marked = pin
         else
             topPinLevel = math.max(topPinLevel, pin:GetFrameLevel())
@@ -753,14 +753,14 @@ function Provider:RefreshAllData()
     tracker:Show()
 end
 
--- Map menu: one "Vendor Atlas" button with the layer toggles and a shortcut to the window --------
+-- Map menu: one "Merchant Map" button with the layer toggles and a shortcut to the window --------
 
 
 local OPTIONS = {
-    { text = "Open Vendor Atlas", note = "Search and browse everything you've recorded.",
-      action = function() VA:Toggle() end },
+    { text = "Open Merchant Map", note = "Search and browse everything you've recorded.",
+      action = function() MM:Toggle() end },
     { text = "Vendors", setting = "showAllVendors", color = { 1, 0.82, 0 },
-      note = "Show every vendor you've visited. While searching in the Vendor Atlas window, only matching vendors are shown." },
+      note = "Show every vendor you've visited. While searching in the Merchant Map window, only matching vendors are shown." },
     { text = "Unvisited Vendors", setting = "showUnvisited", color = { 1, 0.35, 0.3 },
       note = "Red pins use Classic data and turn into normal vendors once you open their shop." },
     { text = "Show hidden", setting = "showHidden", color = { 0.75, 0.75, 0.75 },
@@ -777,7 +777,7 @@ local function CreateMenuRow(menu, option, y)
     hl:SetColorTexture(1, 1, 1, 0.07)
     row:SetHighlightTexture(hl)
 
-    local label = row:CreateFontString(nil, "OVERLAY", "VA_GameFontHighlightSmall")
+    local label = row:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
     label:SetPoint("LEFT", 26, 0)
     label:SetText(option.text)
 
@@ -797,7 +797,7 @@ local function CreateMenuRow(menu, option, y)
         fill:SetColorTexture(option.color[1], option.color[2], option.color[3])
 
         function row:Update()
-            local on = VA.db[option.setting]
+            local on = MM.db[option.setting]
             fill:SetShown(on)
             if on then
                 label:SetTextColor(option.color[1], option.color[2], option.color[3])
@@ -806,9 +806,9 @@ local function CreateMenuRow(menu, option, y)
             end
         end
         row:SetScript("OnClick", function(self)
-            VA.db[option.setting] = not VA.db[option.setting] or nil
+            MM.db[option.setting] = not MM.db[option.setting] or nil
             self:Update()
-            VA:RefreshMap()
+            MM:RefreshMap()
         end)
     else
         local icon = row:CreateTexture(nil, "ARTWORK")
@@ -857,11 +857,11 @@ local function CreateMapMenu()
     icon:SetSize(12, 12)
     icon:SetPoint("LEFT", 7, 0)
     icon:SetTexture(COIN)
-    local label = button:CreateFontString(nil, "OVERLAY", "VA_GameFontNormalSmall")
+    local label = button:CreateFontString(nil, "OVERLAY", "MM_GameFontNormalSmall")
     label:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
     label:SetPoint("LEFT", icon, "RIGHT", 5, 0)
-    label:SetText("VA")
-    local arrow = button:CreateFontString(nil, "OVERLAY", "VA_GameFontDisableSmall")
+    label:SetText("MM")
+    local arrow = button:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
     arrow:SetPoint("RIGHT", -7, 0)
     arrow:SetText("v")
 
@@ -913,17 +913,17 @@ end
 
 -- API used by the UI ------------------------------------------------------------
 
-function VA:PosOnMap(vendor, mapID)
+function MM:PosOnMap(vendor, mapID)
     return PosOnMap(vendor, mapID)
 end
 
 -- Vendors are keyed by NPC ID, service NPCs (trainers etc.) by "s" .. NPC ID
-function VA:GetNPC(key)
+function MM:GetNPC(key)
     return self.db.vendors[key] or (self.services and self.services[key])
 end
 
 -- Tooltip for a trainer, flight master or other service NPC
-function VA:ShowServiceTooltip(owner, key, stacked, anchor)
+function MM:ShowServiceTooltip(owner, key, stacked, anchor)
     local npc = self.services and self.services[key]
     if not npc then return end
     GameTooltip:SetOwner(owner, anchor or "ANCHOR_RIGHT")
@@ -958,34 +958,34 @@ end
 
 -- Raid marker put on targeted vendors, 1 (star) to 8 (skull). The next click marks again,
 -- since the vendor marked so far still has the old icon.
-function VA:SetRaidMarker(index)
+function MM:SetRaidMarker(index)
     self.db.raidMarker = index ~= 8 and index or nil
     lastMarked = nil
     if targetButton and targetButton:IsShown() and not InCombatLockdown() then AimButton(targetButton) end
 end
 
 -- Option: target the vendor without putting a raid marker on them
-function VA:SetRaidMarkerEnabled(on)
+function MM:SetRaidMarkerEnabled(on)
     self.db.noRaidMarker = not on or nil
     lastMarked = nil
     if targetButton and targetButton:IsShown() and not InCombatLockdown() then AimButton(targetButton) end
 end
 
-function VA:AttachTargetButton(owner, opts)
+function MM:AttachTargetButton(owner, opts)
     AttachTargetButton(owner, opts)
 end
 
-function VA:IsTargetOwner(frame)
+function MM:IsTargetOwner(frame)
     return IsTargetOwner(frame)
 end
 
-function VA:RefreshMap()
+function MM:RefreshMap()
     if Provider:GetMap() and WorldMapFrame:IsShown() then
         Provider:RefreshAllData()
     end
 end
 
-function VA:ShowVendorTooltip(owner, key, stacked)
+function MM:ShowVendorTooltip(owner, key, stacked)
     if self.services and self.services[key] then return self:ShowServiceTooltip(owner, key, stacked) end
     local vendor = self.db.vendors[key]
     local matched = self.pinned and self.pinned[key]
@@ -1056,14 +1056,14 @@ local function PlaceWaypoint(mapID, x, y, name)
     C_SuperTrack.SetSuperTrackedUserWaypoint(true)
 end
 
-function VA:ClearWaypoint()
+function MM:ClearWaypoint()
     local wui = WaypointUIAPI and WaypointUIAPI.Navigation
     if wui and wui.ClearUserNavigation and pcall(wui.ClearUserNavigation) then return end
     C_Map.ClearUserWaypoint()
 end
 
 -- name is what the waypoint is called where that's supported, like the item you're buying
-function VA:SetWaypoint(vendor, name)
+function MM:SetWaypoint(vendor, name)
     if not (vendor and vendor.mapID and C_Map.CanSetUserWaypointOnMap) then return end
 
     -- Micro maps often reject waypoints, so climb until one accepts
@@ -1119,8 +1119,8 @@ local function ClosestNPC(keys, visible)
 
     local best, bestDist
     for key, value in pairs(keys) do
-        local npc = VA:GetNPC(key)
-        local shown = (not visible or visible(value)) and (VA.db.showHidden or not VA.db.hiddenVendors[key])
+        local npc = MM:GetNPC(key)
+        local shown = (not visible or visible(value)) and (MM.db.showHidden or not MM.db.hiddenVendors[key])
         local x, y
         if shown and npc then x, y = PosOnMap(npc, continent) end
         if x then
@@ -1131,27 +1131,27 @@ local function ClosestNPC(keys, visible)
     return best
 end
 
-local function OfferVisible(offer) return VA:OfferVisible(offer) end
+local function OfferVisible(offer) return MM:OfferVisible(offer) end
 
 local function ClosestVendor(item)
     return ClosestNPC(item.vendors, OfferVisible)
 end
 
-function VA:ClosestVendorKey(itemID)
+function MM:ClosestVendorKey(itemID)
     local item = self.db.items[itemID]
     return item and ClosestVendor(item)
 end
 
 -- Closest of a set of service NPC keys
-function VA:ClosestServiceKey(keys)
+function MM:ClosestServiceKey(keys)
     return ClosestNPC(keys)
 end
 
 -- NPCs skipped this session, when they're not where they should be
-VA.skipped = {}
+MM.skipped = {}
 
--- /va unverified: marks the nearest NPC you still need to talk to
-function VA:PointToNextUnverified()
+-- /mm unverified: marks the nearest NPC you still need to talk to
+function MM:PointToNextUnverified()
     if not self.verifyMode then return end
     local keys = UnverifiedNPCs()
     for key in pairs(self.skipped) do keys[key] = nil end
@@ -1160,12 +1160,12 @@ function VA:PointToNextUnverified()
         self:SetMinimapVendor(self:GetNPC(key), key)
     else
         self:ClearMinimapVendor()
-        print("|cffccb084Vendor Atlas:|r no unverified NPCs left on this continent.")
+        print("|cffccb084Merchant Map:|r no unverified NPCs left on this continent.")
     end
 end
 
 -- Skips the marked NPC and points to the next one
-function VA:SkipUnverified()
+function MM:SkipUnverified()
     if not (self.verifyMode and self.minimapKey) then return end
     self.skipped[self.minimapKey] = true
     self:PointToNextUnverified()
@@ -1178,7 +1178,7 @@ end
 local function OpenMapAt(mapID)
     if WorldMapFrame:IsShown() then
         WorldMapFrame:SetMapID(mapID)
-    elseif not VA.db.noAutoMap and not InCombatLockdown() then
+    elseif not MM.db.noAutoMap and not InCombatLockdown() then
         if OpenWorldMap then
             OpenWorldMap(mapID)
         else
@@ -1201,7 +1201,7 @@ local function TargetIsHere(name)
 end
 
 -- Same as items: minimap marker, target and skull, and the map on their zone unless they're right here
-function VA:ShowServiceOnMap(key)
+function MM:ShowServiceOnMap(key)
     local npc = self.services and self.services[key]
     if not npc then return end
     self:SetMinimapVendor(npc, key)
@@ -1212,7 +1212,7 @@ function VA:ShowServiceOnMap(key)
     end)
 end
 
-function VA:ShowItemOnMap(itemID)
+function MM:ShowItemOnMap(itemID)
     local item = self.db.items[itemID]
     if not item then return end
 
@@ -1228,7 +1228,7 @@ function VA:ShowItemOnMap(itemID)
     C_Timer.After(0.1, function()
         -- Vendor is right here: leave a closed map closed, show an open one on your zone
         if TargetIsHere(name) then return end
-        VA:OpenMapForItem(itemID)
+        MM:OpenMapForItem(itemID)
     end)
 end
 
@@ -1238,8 +1238,8 @@ local function OpenMapForNPCs(keys, visible)
     local playerZone = playerMap and Ancestor(playerMap, Enum.UIMapType.Zone)
     local zones = {}
     for key, value in pairs(keys) do
-        local npc = VA:GetNPC(key)
-        local shown = (not visible or visible(value)) and (VA.db.showHidden or not VA.db.hiddenVendors[key])
+        local npc = MM:GetNPC(key)
+        local shown = (not visible or visible(value)) and (MM.db.showHidden or not MM.db.hiddenVendors[key])
         if shown and npc and npc.mapID then
             local zone = Ancestor(npc.mapID, Enum.UIMapType.Zone)
             if zone then zones[zone] = true end
@@ -1250,13 +1250,13 @@ local function OpenMapForNPCs(keys, visible)
     OpenMapAt((playerZone and zones[playerZone]) and playerZone or CommonMap(zones) or next(zones))
 end
 
-function VA:OpenMapForItem(itemID)
+function MM:OpenMapForItem(itemID)
     local item = self.db.items[itemID]
     if item then OpenMapForNPCs(item.vendors, OfferVisible) end
 end
 
 -- A set of service NPCs, like an item's vendors: closest on the minimap, map showing them all
-function VA:ShowServicesOnMap(keys)
+function MM:ShowServicesOnMap(keys)
     local closest = ClosestNPC(keys)
     local name = closest and self.services[closest].name
     if closest then
@@ -1271,7 +1271,7 @@ function VA:ShowServicesOnMap(keys)
 end
 
 -- When the map is already open, shows the smallest map holding every pinned vendor
-function VA:FitMapToActive()
+function MM:FitMapToActive()
     if not (WorldMapFrame:IsShown() and self.activeVendors) then return end
     local zones = {}
     for key in pairs(self.activeVendors) do
