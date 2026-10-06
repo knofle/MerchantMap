@@ -172,6 +172,8 @@ local function CreateDialog()
     dialog:SetScript("OnDragStop", dialog.StopMovingOrSizing)
     dialog:SetClampedToScreen(true)
     Skin(dialog, C.bg, 0.97)
+    -- New frames start shown; start hidden so the first toggle opens it
+    dialog:Hide()
     tinsert(UISpecialFrames, "VendorAtlasShareFrame")
 
     local title = dialog:CreateFontString(nil, "OVERLAY", "VA_GameFontNormal")

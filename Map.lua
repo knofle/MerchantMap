@@ -248,7 +248,7 @@ end
 local function TargetMacro(name)
     local macro = "/cleartarget\n/targetexact " .. name
     if lastMarked == name then return macro end
-    macro = macro .. "\n/tm [@target,exists] 8"
+    macro = macro .. "\n/tm [@target,exists] " .. (VA.db.raidMarker or 8)
     if lastMarked then
         macro = macro .. "\n/stopmacro [@target,exists]\n/targetexact " .. lastMarked
             .. "\n/tm [@target,exists] 0\n/cleartarget"
@@ -945,7 +945,7 @@ function VA:ShowServiceTooltip(owner, key, stacked, anchor)
     if stacked and stacked > 1 then
         GameTooltip:AddLine(("Click to pick between %d overlapping vendors"):format(stacked), 1, 0.82, 0)
     else
-        GameTooltip:AddLine("Click to target and mark with a skull (when nearby)", 0.5, 0.5, 0.5)
+        GameTooltip:AddLine("Click to target and mark them (when nearby)", 0.5, 0.5, 0.5)
     end
     GameTooltip:AddLine("Shift-click to set waypoint", 0.5, 0.5, 0.5)
     if key == self.minimapKey then
@@ -953,6 +953,14 @@ function VA:ShowServiceTooltip(owner, key, stacked, anchor)
     end
     GameTooltip:AddLine(self.db.hiddenVendors[key] and "Alt-click to enable" or "Alt-click to hide", 0.5, 0.5, 0.5)
     GameTooltip:Show()
+end
+
+-- Raid marker put on targeted vendors, 1 (star) to 8 (skull). The next click marks again,
+-- since the vendor marked so far still has the old icon.
+function VA:SetRaidMarker(index)
+    self.db.raidMarker = index ~= 8 and index or nil
+    lastMarked = nil
+    if targetButton and targetButton:IsShown() and not InCombatLockdown() then AimButton(targetButton) end
 end
 
 function VA:AttachTargetButton(owner, opts)
@@ -1019,7 +1027,7 @@ function VA:ShowVendorTooltip(owner, key, stacked)
     if stacked and stacked > 1 then
         GameTooltip:AddLine(("Click to pick between %d overlapping vendors"):format(stacked), 1, 0.82, 0)
     else
-        GameTooltip:AddLine("Click to target and mark with a skull (when nearby)", 0.5, 0.5, 0.5)
+        GameTooltip:AddLine("Click to target and mark them (when nearby)", 0.5, 0.5, 0.5)
     end
     GameTooltip:AddLine("Shift-click to set waypoint", 0.5, 0.5, 0.5)
     if key == self.minimapKey then

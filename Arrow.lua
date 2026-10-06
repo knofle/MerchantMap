@@ -3,7 +3,8 @@ local _, VA = ...
 -- Direction arrow to the marked vendor, like TomTom's. Shown while a vendor is marked.
 -- Drag to move, right-click to clear the marker, /va arrow to turn it off or on.
 
-local ARROW = "Interface\\Minimap\\MinimapArrow"
+local ARROW = "Interface\\AddOns\\VendorAtlas\\arrow"
+VA.ARROW_TEXTURE = ARROW
 local INTERVAL = 0.05
 local ARRIVED = 5 -- yards
 
@@ -49,12 +50,12 @@ local function Tint(angle)
     arrow:SetVertexColor(0.35 + 0.55 * off, 0.85 - 0.65 * off, 0.35 - 0.25 * off)
 end
 
-local elapsed = 0
-local function Update(_, dt)
-    elapsed = elapsed + dt
-    if elapsed < INTERVAL then return end
-    elapsed = 0
+-- Direction to the vendor (radians from north), refreshed every INTERVAL; nil hides the arrow
+local bearing, lastAngle
 
+-- Where the vendor is, and how far: changes slowly, so only every INTERVAL
+local function Locate()
+    bearing = nil
     local here = Continent(C_Map.GetBestMapForUnit("player"))
     if here ~= continent then
         -- Changed continent: find the vendor on the new one
@@ -65,9 +66,7 @@ local function Update(_, dt)
         end
     end
     local pos = continent and tx and C_Map.GetPlayerMapPosition(continent, "player")
-    local facing = GetPlayerFacing()
     if not (pos and width and width > 0) then
-        arrow:Hide()
         distance:SetText("Not on this continent")
         return
     end
@@ -76,25 +75,49 @@ local function Update(_, dt)
     local dx, dy = (tx - px) * width, (ty - py) * height
     local yards = math.sqrt(dx * dx + dy * dy)
     if yards < ARRIVED then
-        arrow:Hide()
         distance:SetText("Arrived")
         return
     end
     distance:SetText(("%d yd"):format(yards))
-    if not facing then
+    bearing = math.atan2(-dx, -dy)
+end
+
+-- Turning is read every frame so the arrow follows smoothly; it only redraws when the angle changes
+local elapsed = INTERVAL
+local function Update(_, dt)
+    elapsed = elapsed + dt
+    if elapsed >= INTERVAL then
+        elapsed = 0
+        Locate()
+    end
+
+    local facing = bearing and GetPlayerFacing()
+    if not facing or (issecretvalue and issecretvalue(facing)) then
         arrow:Hide()
+        lastAngle = nil
         return
     end
-    local angle = math.atan2(-dx, -dy) - facing
-    arrow:SetRotation(angle)
-    Tint(angle)
+    local angle = bearing - facing
+    if angle ~= lastAngle then
+        lastAngle = angle
+        arrow:SetRotation(angle)
+        Tint(angle)
+    end
     arrow:Show()
 end
 
 frame:SetScript("OnUpdate", Update)
 
-local function StartMoving() frame:StartMoving() end
+-- Locking (in the options) stops dragging
+local moving
+local function StartMoving()
+    if VA.db.arrowLocked then return end
+    moving = true
+    frame:StartMoving()
+end
 local function StopMoving()
+    if not moving then return end
+    moving = nil
     frame:StopMovingOrSizing()
     local point, _, relPoint, x, y = frame:GetPoint()
     VA.db.arrowPoint = { point, relPoint, x, y }
@@ -119,8 +142,8 @@ frame:SetScript("OnClick", OnClick)
 local function ShowTooltip(self)
     GameTooltip:SetOwner(self, "ANCHOR_TOP")
     GameTooltip:AddLine(target and target.name or "Vendor Atlas", 1, 1, 1)
-    GameTooltip:AddLine("Click to target and mark with a skull (when nearby)", 0.5, 0.5, 0.5)
-    GameTooltip:AddLine("Drag to move", 0.5, 0.5, 0.5)
+    GameTooltip:AddLine("Click to target and mark them (when nearby)", 0.5, 0.5, 0.5)
+    if not VA.db.arrowLocked then GameTooltip:AddLine("Drag to move", 0.5, 0.5, 0.5) end
     if VA.verifyMode then
         GameTooltip:AddLine("Shift-click to find the nearest from where you are", 0.35, 0.85, 0.35)
         GameTooltip:AddLine("Right-click to skip to the next one", 0.35, 0.85, 0.35)
@@ -174,6 +197,13 @@ function VA:SetArrowShown(show)
     self:SetArrowTarget(target)
 end
 
+-- Arrow size as a scale of its normal 56 pixels; the text below it keeps its size
+local SIZE = 56
+function VA:SetArrowSize(scale)
+    self.db.arrowScale = scale ~= 1 and scale or nil
+    frame:SetSize(SIZE * scale, SIZE * scale)
+end
+
 function VA:ToggleArrow()
     self:SetArrowShown(self.db.arrowHidden)
     print(("|cffccb084Vendor Atlas:|r arrow %s."):format(self.db.arrowHidden and "off" or "on"))
@@ -187,4 +217,5 @@ events:SetScript("OnEvent", function()
         frame:ClearAllPoints()
         frame:SetPoint(p[1], UIParent, p[2], p[3], p[4])
     end
+    VA:SetArrowSize(VA.db.arrowScale or 1)
 end)
