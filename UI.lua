@@ -1095,6 +1095,32 @@ function VA:Toggle()
     panel:SetShown(not panel:IsShown())
 end
 
+-- /va <words>: opens the window searching all items and services for them
+function VA:Search(text)
+    panel:Show()
+    if category ~= ALL then
+        category, offset = ALL, 0
+        MarkDirty()
+    end
+    box:SetText(text)
+    VA:RefreshList()
+
+    -- A search for one kind of service goes straight to the nearest one, like clicking its "Nearest" row
+    local nearest
+    for _, id in ipairs(results) do
+        if IsNearest(id) then
+            if nearest then return end -- several kinds match, so let the player pick
+            nearest = id
+        end
+    end
+    local key = nearest and ServiceKey(nearest)
+    if key then
+        selected = nearest
+        VA:ShowServiceOnMap(key)
+        VA:RefreshList()
+    end
+end
+
 -- Category tree -----------------------------------------------------------
 
 local function ExpandTo(path)
@@ -1627,8 +1653,9 @@ end)
 
 SLASH_VENDORATLAS1 = "/va"
 SLASH_VENDORATLAS2 = "/vendoratlas"
-SlashCmdList.VENDORATLAS = function(msg)
-    msg = strtrim(strlower(msg or ""))
+SlashCmdList.VENDORATLAS = function(input)
+    input = strtrim(input or "")
+    local msg = strlower(input)
     if msg == "debug" then
         VA.debug = not VA.debug
         print(("|cffccb084Vendor Atlas:|r targeting debug %s."):format(VA.debug and "on" or "off"))
@@ -1651,6 +1678,8 @@ SlashCmdList.VENDORATLAS = function(msg)
     elseif msg == "auto" then
         local count = VA:AutoCategorizeUncategorized()
         print(("|cffccb084Vendor Atlas:|r auto-categorizing %d uncategorized items."):format(count))
+    elseif msg ~= "" then
+        VA:Search(input)
     else
         VA:Toggle()
     end

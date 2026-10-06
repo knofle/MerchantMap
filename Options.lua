@@ -10,7 +10,7 @@ local HELP = [[
 Open a vendor's shop and Vendor Atlas records what they sell and where they stand. Talking to trainers, flight masters and other service NPCs records them too. For NPCs that won't talk to you, target them within 10 yards.
 
 |cffccb084Searching|r
-Open the window with |cffffffff/va|r or the minimap button. Search by name, category or shorthand ("tailoring mats", "lw recipes"), by level ("food 10-20", "45", "over 30") or for services ("hunter trainer", "repair"). Drag items onto categories to sort them, right-click to remove them.
+Open the window with |cffffffff/va|r or the minimap button, or search straight from chat with |cffffffff/va hunter trainer|r. Search by name, category or shorthand ("tailoring mats", "lw recipes"), by level ("food 10-20", "45", "over 30") or for services ("hunter trainer", "repair"). Drag items onto categories to sort them, right-click to remove them.
 
 |cffccb084Finding a vendor|r
 Click an item to target the closest vendor and put a raid marker on them, show them on the minimap and point the arrow at them. Shift-click a map pin for a waypoint, alt-click to hide it. The VA button on the world map picks which pins show.
@@ -19,7 +19,7 @@ Click an item to target the closest vendor and put a raid marker on them, show t
 Red pins are Classic data that hasn't been confirmed in Forever. Visit or talk to them to confirm.
 
 |cffccb084Commands|r
-|cffffffff/va|r  |cffffffff/va arrow|r  |cffffffff/va share|r  |cffffffff/va auto|r  |cffffffff/va minimap|r]]
+|cffffffff/va|r  |cffffffff/va <search>|r  |cffffffff/va arrow|r  |cffffffff/va share|r  |cffffffff/va auto|r  |cffffffff/va minimap|r]]
 
 local panel = CreateFrame("Frame")
 panel:Hide()

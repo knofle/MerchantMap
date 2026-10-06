@@ -179,7 +179,7 @@ function VA:ClearMinimapVendor()
     pin:Hide()
     if placedWaypoint then
         placedWaypoint = nil
-        C_Map.ClearUserWaypoint()
+        VA:ClearWaypoint()
     end
     VA:SetArrowTarget(nil)
     VA:RefreshMap()
@@ -193,7 +193,8 @@ end
 
 pin:SetScript("OnClick", function() VA:ClearMinimapVendor() end)
 
-function VA:SetMinimapVendor(vendor, key)
+-- label names the waypoint (the item you clicked); defaults to the vendor's name
+function VA:SetMinimapVendor(vendor, key, label)
     if not (vendor and vendor.mapID) then return end
     target, VA.minimapKey = vendor, key
     wipe(cached)
@@ -209,7 +210,7 @@ function VA:SetMinimapVendor(vendor, key)
     Update()
     -- Option: a map waypoint on the vendor too
     if VA.db.autoWaypoint then
-        VA:SetWaypoint(vendor)
+        VA:SetWaypoint(vendor, label)
         placedWaypoint = true
     end
     VA:SetArrowTarget(vendor)

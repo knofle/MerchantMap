@@ -1045,7 +1045,25 @@ function VA:ShowVendorTooltip(owner, key, stacked)
     GameTooltip:Show()
 end
 
-function VA:SetWaypoint(vendor)
+-- Uses WaypointUI's navigation when it's installed, so the waypoint can carry a name
+local function PlaceWaypoint(mapID, x, y, name)
+    local wui = WaypointUIAPI and WaypointUIAPI.Navigation
+    if wui and wui.NewUserNavigation then
+        local ok, placed = pcall(wui.NewUserNavigation, { name = name, mapID = mapID, x = x * 100, y = y * 100 })
+        if ok and placed then return end
+    end
+    C_Map.SetUserWaypoint(UiMapPoint.CreateFromCoordinates(mapID, x, y))
+    C_SuperTrack.SetSuperTrackedUserWaypoint(true)
+end
+
+function VA:ClearWaypoint()
+    local wui = WaypointUIAPI and WaypointUIAPI.Navigation
+    if wui and wui.ClearUserNavigation and pcall(wui.ClearUserNavigation) then return end
+    C_Map.ClearUserWaypoint()
+end
+
+-- name is what the waypoint is called where that's supported, like the item you're buying
+function VA:SetWaypoint(vendor, name)
     if not (vendor and vendor.mapID and C_Map.CanSetUserWaypointOnMap) then return end
 
     -- Micro maps often reject waypoints, so climb until one accepts
@@ -1053,10 +1071,7 @@ function VA:SetWaypoint(vendor)
     while mapID and mapID ~= 0 and depth < 10 do
         if C_Map.CanSetUserWaypointOnMap(mapID) then
             local x, y = PosOnMap(vendor, mapID)
-            if x then
-                C_Map.SetUserWaypoint(UiMapPoint.CreateFromCoordinates(mapID, x, y))
-                C_SuperTrack.SetSuperTrackedUserWaypoint(true)
-            end
+            if x then PlaceWaypoint(mapID, x, y, name or vendor.name) end
             return
         end
         local info = C_Map.GetMapInfo(mapID)
@@ -1205,7 +1220,7 @@ function VA:ShowItemOnMap(itemID)
     local name = closest and self.db.vendors[closest].name
     -- A new item replaces the old marker, or clears it when nobody on this continent sells it
     if closest then
-        self:SetMinimapVendor(self.db.vendors[closest], closest)
+        self:SetMinimapVendor(self.db.vendors[closest], closest, item.name)
     else
         self:ClearMinimapVendor()
     end
