@@ -1447,7 +1447,6 @@ local function Row_OnClick(self, button)
 end
 
 local function Row_OnDragStart(self)
-    if MM.debug then print("|cffccb084MM debug:|r row drag start", tostring(self.itemID)) end
     if not self.itemID or IsService(self.itemID) then return end
     GameTooltip:Hide()
     local item = MM.db.items[self.itemID]
@@ -1487,12 +1486,22 @@ dragIcon:SetScript("OnHide", function()
     if dropRow then dropRow.drop:Hide() end
     dropRow = nil
 end)
-dragIcon:SetScript("OnUpdate", function(self)
-    -- Safety net: if the drag ended without us hearing about it, drop the icon
-    if not IsMouseButtonDown("LeftButton") then
-        self:Hide()
-        return
+-- Drops the item on the category under the cursor, if any. Runs on the release itself,
+-- whether or not the frame the drag started on hears about it.
+local function Drop()
+    local itemID, target = dragIcon.itemID, DropTarget()
+    dragIcon.itemID = nil
+    dragIcon:Hide()
+    MM:EndTargetDrag()
+    if itemID and target then
+        MM:AssignItem(itemID, target.path)
+        countsDirty = true
+        MM:RefreshList()
     end
+end
+
+dragIcon:SetScript("OnUpdate", function(self)
+    if not IsMouseButtonDown("LeftButton") then return Drop() end
     local x, y = GetCursorPosition()
     local scale = UIParent:GetEffectiveScale()
     self:ClearAllPoints()
@@ -1501,18 +1510,7 @@ dragIcon:SetScript("OnUpdate", function(self)
 end)
 
 local function Row_OnDragStop()
-    local target = DropTarget()
-    if MM.debug then
-        print("|cffccb084MM debug:|r row drag stop, item:", tostring(dragIcon.itemID), "target:", target and target.path or "none")
-    end
-    dragIcon:Hide()
-    if not dragIcon.itemID then return end
-    if target then
-        MM:AssignItem(dragIcon.itemID, target.path)
-        countsDirty = true
-        MM:RefreshList()
-    end
-    dragIcon.itemID = nil
+    if dragIcon.itemID then Drop() end
 end
 
 local function Row_Enter(self)
