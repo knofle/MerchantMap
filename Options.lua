@@ -138,7 +138,7 @@ Check("Open the map", "",
     function() return not MM.db.noAutoMap end,
     function(on) MM.db.noAutoMap = not on or nil end)
 
-Check("Set minimap marker", "",
+Check("Set minimap marker", "When on this continent",
     function() return not MM.db.noMinimapPin end,
     function(on) MM:SetMinimapPinShown(on) end)
 
@@ -171,6 +171,10 @@ local ddArrow = dropdown:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSma
 ddArrow:SetPoint("RIGHT", -7, 0)
 ddArrow:SetText("v")
 
+
+local markerNote = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
+markerNote:SetPoint("LEFT", dropdown, "RIGHT", 10, 0)
+markerNote:SetText("When close enough to target the NPC")
 
 local function UpdateDropdown()
     local i = MM.db.raidMarker or 8
@@ -227,6 +231,7 @@ scroll:HookScript("OnVerticalScroll", function() list:Hide() end)
 function markerCheck:OnUpdate(on)
     dropdown:SetEnabled(on)
     dropdown:SetAlpha(on and 1 or 0.4)
+    markerNote:SetAlpha(on and 1 or 0.4)
     if not on then list:Hide() end
 end
 
@@ -234,7 +239,7 @@ end
 Section("Direction arrow")
 local arrowTop = y
 
-Check("Show", "",
+Check("Show", "When on this continent",
     function() return not MM.db.arrowHidden end,
     function(on) MM:SetArrowShown(on) end)
 
