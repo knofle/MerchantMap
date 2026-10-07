@@ -87,6 +87,12 @@ end
 
 -- Classifier ------------------------------------------------------------------
 
+-- Items the rules get wrong, by name: filed here instead
+local OVERRIDES = {
+    ["thieves' tools"] = "Class Supplies/Reagents",
+    ["flask of stormwind tawny"] = "Consumables/Food & Drink/Other",
+}
+
 -- Returns a list of category paths, or nil if item data is not loaded yet
 local function Classify(itemID)
     if not C_Item.IsItemDataCachedByID(itemID) then
@@ -94,6 +100,7 @@ local function Classify(itemID)
         return
     end
     local name, _, _, _, minLevel, _, _, _, _, _, _, _, _, _, _, _, isReagent = C_Item.GetItemInfo(itemID)
+    if name and OVERRIDES[strlower(name)] then return { OVERRIDES[strlower(name)] } end
     local lines = TooltipLines(itemID)
     if not (name and lines) then return end
 
@@ -280,5 +287,19 @@ end
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function()
-    for itemID in pairs(MM.db.items) do MM:QueueAutoCategorize(itemID) end
+    local db = MM.db
+    db.overridden = db.overridden or {}
+    for itemID, item in pairs(db.items) do
+        -- Already sorted before an override was added: moved once, so your own changes stick
+        local path = item.name and OVERRIDES[strlower(item.name)]
+        if path and db.overridden[itemID] ~= path then
+            db.overridden[itemID] = path
+            if not (db.itemCats[itemID] and db.itemCats[itemID][path]) then
+                db.itemCats[itemID] = nil
+                MM:AssignItem(itemID, MM:AddCategory(path))
+            end
+            db.autoDone[itemID] = true
+        end
+        MM:QueueAutoCategorize(itemID)
+    end
 end)

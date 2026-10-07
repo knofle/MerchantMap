@@ -411,7 +411,8 @@ end
 
 -- opts: name (defaults to the owner's vendor), rightClick, onEnter, onLeave, onClick, onDragStart, onDragStop
 local function AttachTargetButton(owner, opts)
-    if InCombatLockdown() then return end
+    -- A list refresh mid-drag would re-aim the button and lose the drop
+    if InCombatLockdown() or (targetButton and targetButton.dragging) then return end
     opts = opts or {}
     local b = TargetButton()
     b.owner, b.opts, b.dragging = owner, opts, nil
@@ -564,10 +565,19 @@ local hovered
 local tracker = CreateFrame("Frame")
 tracker:Hide()
 
+-- Whether the cursor is on one of our pins, and whether it's on the map at all
 local function MouseOnPins()
     local focus = GetMouseFoci and GetMouseFoci()[1] or (GetMouseFocus and GetMouseFocus())
     if focus and focus == targetButton then focus = focus.owner end
-    return focus and focus.GetMap and focus.key ~= nil
+    if not focus then return false, false end
+    if focus.GetMap and focus.key ~= nil then return true, true end
+    local canvas, frame = WorldMapFrame.ScrollContainer, focus
+    for _ = 1, 6 do
+        if frame == canvas then return false, true end
+        frame = frame.GetParent and frame:GetParent()
+        if not frame then break end
+    end
+    return false, false
 end
 
 -- The waypoint we placed sits on top of its vendor's pin and takes the mouse,
@@ -579,8 +589,8 @@ end
 
 local function NearestPin()
     if not WorldMapFrame:IsVisible() then return end
-    local onPins = MouseOnPins()
-    if not (onPins or MM.waypointVendor) then return end
+    local onPins, onMap = MouseOnPins()
+    if not (onPins or (onMap and MM.waypointVendor)) then return end
     local x, y = GetCursorPosition()
     local best, bestDist
     for pin in WorldMapFrame:EnumeratePinsByTemplate(PIN) do
