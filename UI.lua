@@ -1447,6 +1447,7 @@ local function Row_OnClick(self, button)
 end
 
 local function Row_OnDragStart(self)
+    if MM.debug then print("|cffccb084MM debug:|r row drag start", tostring(self.itemID)) end
     if not self.itemID or IsService(self.itemID) then return end
     GameTooltip:Hide()
     local item = MM.db.items[self.itemID]
@@ -1501,6 +1502,9 @@ end)
 
 local function Row_OnDragStop()
     local target = DropTarget()
+    if MM.debug then
+        print("|cffccb084MM debug:|r row drag stop, item:", tostring(dragIcon.itemID), "target:", target and target.path or "none")
+    end
     dragIcon:Hide()
     if not dragIcon.itemID then return end
     if target then

@@ -373,11 +373,13 @@ local function TargetButton()
         if self.opts.onLeave then self.opts.onLeave(self.owner) end
     end)
     b:SetScript("OnDragStart", function(self)
+        Debug("drag start", "has handler:", tostring(self.opts.onDragStart ~= nil), "shown:", tostring(self:IsShown()))
         if not self.opts.onDragStart then return end
         self.dragging = true
         self.opts.onDragStart(self.owner)
     end)
     b:SetScript("OnDragStop", function(self)
+        Debug("drag stop", "dragging:", tostring(self.dragging))
         -- Hiding the button below fires OnDragStop again; only handle the real one
         if not self.dragging then return end
         self.dragging = nil
@@ -405,14 +407,19 @@ local function PlaceTargetButton(owner)
     b:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x * scale, y * scale)
 end
 
+-- Never mid-drag: hiding the button would end the drag
 local function HideTargetButton()
-    if targetButton and not InCombatLockdown() then targetButton:Hide() end
+    if targetButton and not targetButton.dragging and not InCombatLockdown() then
+        if targetButton:IsShown() then Debug("hide button") end
+        targetButton:Hide()
+    end
 end
 
 -- opts: name (defaults to the owner's vendor), rightClick, onEnter, onLeave, onClick, onDragStart, onDragStop
 local function AttachTargetButton(owner, opts)
     -- A list refresh mid-drag would re-aim the button and lose the drop
     if InCombatLockdown() or (targetButton and targetButton.dragging) then return end
+    Debug("attach", owner.itemID or owner.key or "?", "drag:", tostring(opts and opts.onDragStart ~= nil))
     opts = opts or {}
     local b = TargetButton()
     b.owner, b.opts, b.dragging = owner, opts, nil
