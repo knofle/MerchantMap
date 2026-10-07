@@ -3,7 +3,7 @@ local _, MM = ...
 local ROW_H = 20
 -- Visible rows; recalculated when the window is resized
 local ROWS, TREE_ROWS = 18, 16
-local TREE_W, LIST_W = 180, 360
+local TREE_W, LIST_W = 196, 360
 local C = MM.COLORS
 local ACCENT, BORDER = C.accent, C.border
 local MAX_TOOLTIP_VENDORS = 12
@@ -844,7 +844,9 @@ end
 local function BuildTree()
     local db = MM.db
     wipe(nodes)
-    nodes[1] = { path = ALL, label = "All items", depth = 0 }
+    -- Item categories fold up under All items; Services sit apart below a divider
+    nodes[1] = { path = ALL, label = "All items", depth = 0, kids = true }
+    local itemsHidden = db.collapsed[ALL]
 
     local all, hasKids = {}, {}
     for path in pairs(db.categories) do all[path] = true end
@@ -855,19 +857,30 @@ local function BuildTree()
         if parent then hasKids[parent] = true end
     end
 
+    local services = {}
     for _, path in ipairs(SortedPaths(all)) do
-        local hidden, parent = false, MM:ParentPath(path)
+        local isService = path == "Services" or path:sub(1, 9) == "Services/"
+        local hidden, parent = not isService and itemsHidden, MM:ParentPath(path)
         while parent and not hidden do
             hidden = db.collapsed[parent]
             parent = MM:ParentPath(parent)
         end
         if not hidden then
-            local _, depth = path:gsub("/", "")
-            nodes[#nodes + 1] = { path = path, label = path:match("[^/]+$"), depth = depth, kids = hasKids[path] == true }
+            -- level is the depth within its own tree, for the color; depth includes the indent under All items
+            local _, level = path:gsub("/", "")
+            local node = {
+                path = path, label = path:match("[^/]+$"), level = level,
+                depth = isService and level or level + 1, kids = hasKids[path] == true,
+            }
+            if isService then services[#services + 1] = node else nodes[#nodes + 1] = node end
         end
     end
 
-    nodes[#nodes + 1] = { path = UNCAT, label = "Uncategorized", depth = 0 }
+    if not itemsHidden then nodes[#nodes + 1] = { path = UNCAT, label = "Uncategorized", depth = 1 } end
+    if #services > 0 then
+        nodes[#nodes + 1] = { divider = true }
+        for _, node in ipairs(services) do nodes[#nodes + 1] = node end
+    end
 end
 
 local seen = {}
@@ -910,7 +923,17 @@ local function DrawTree()
     treeOffset = math.max(0, math.min(treeOffset, #nodes - TREE_ROWS))
     for i, row in ipairs(treeRows) do
         local node = i <= TREE_ROWS and nodes[treeOffset + i]
-        if node then
+        row.divider:SetShown(node and node.divider == true)
+        row:EnableMouse(not (node and node.divider))
+        if node and node.divider then
+            row.path = nil
+            row.toggle:Hide()
+            row.icon:SetTexture(nil)
+            row.label:SetText("")
+            row.count:SetText("")
+            row.sel:Hide()
+            row:Show()
+        elseif node then
             row.path = node.path
             row.toggle:SetPoint("LEFT", 2 + node.depth * 12, 0)
             row.toggle:SetShown(node.kids == true)
@@ -919,7 +942,7 @@ local function DrawTree()
             row.icon:SetTexture(node.path == ALL and ICONS .. "INV_Misc_Bag_08"
                 or node.path == UNCAT and 134400 or CategoryIcon(node.path))
             if MM:IsCategory(node.path) then
-                row.label:SetTextColor(CategoryColor(node.path, node.depth))
+                row.label:SetTextColor(CategoryColor(node.path, node.level or node.depth))
             else
                 row.label:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
             end
@@ -1202,6 +1225,14 @@ local function CreateTreeRow(i)
     row.sel = row:CreateTexture(nil, "BACKGROUND")
     row.sel:SetAllPoints()
     row.sel:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.2)
+
+    -- Line between the item categories and Services
+    row.divider = row:CreateTexture(nil, "ARTWORK")
+    row.divider:SetHeight(1)
+    row.divider:SetPoint("LEFT", 6, 0)
+    row.divider:SetPoint("RIGHT", -6, 0)
+    row.divider:SetColorTexture(BORDER[1], BORDER[2], BORDER[3], 1)
+    row.divider:Hide()
 
     -- Shown while an item is dragged over the row
     row.drop = CreateFrame("Frame", nil, row)
