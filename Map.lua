@@ -372,10 +372,15 @@ local function TargetButton()
         self:Hide()
         if self.opts.onLeave then self.opts.onLeave(self.owner) end
     end)
+    -- The drag only starts once the cursor has moved a little, by which time it may have moved the
+    -- button onto the next row; the row that was pressed is the one being dragged
+    b:HookScript("OnMouseDown", function(self) self.pressed = { owner = self.owner, opts = self.opts } end)
+    b:HookScript("OnMouseUp", function(self) self.pressed = nil end)
     b:SetScript("OnDragStart", function(self)
-        if not self.opts.onDragStart then return end
+        local pressed = self.pressed or self
+        if not pressed.opts.onDragStart then return end
         self.dragging = true
-        self.opts.onDragStart(self.owner)
+        pressed.opts.onDragStart(pressed.owner)
     end)
     b:SetScript("OnDragStop", function(self)
         -- Hiding the button below fires OnDragStop again; only handle the real one
