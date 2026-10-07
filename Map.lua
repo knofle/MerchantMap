@@ -593,6 +593,24 @@ local function NearestPin()
     return best
 end
 
+-- Holding Ctrl over the vendor under our waypoint hands the mouse back to the waypoint pin,
+-- so it can be ctrl-clicked away
+local function WaypointWanted(pin)
+    return IsControlKeyDown() and UnderWaypoint(pin.vendor)
+end
+
+-- Stacked pins keep their plain click for the overlap list
+local function AttachPinTargeting(pin)
+    if pin.stacked == 1 and not WaypointWanted(pin) then
+        AttachTargetButton(pin, {
+            rightClick = true,
+            unmarkName = pin.key == MM.minimapKey and pin.vendor.name or nil,
+        })
+    else
+        HideTargetButton()
+    end
+end
+
 local function SetHovered(pin)
     if pin == hovered then return end
     if hovered then
@@ -606,20 +624,24 @@ local function SetHovered(pin)
     end
 
     RaisePin(pin, true)
-    local stacked = #OverlappingPins(pin)
-    MM:ShowVendorTooltip(pin, pin.key, stacked)
-    pin.stacked = stacked
-    -- Stacked pins keep their plain click for the overlap list
-    if stacked == 1 then
-        AttachTargetButton(pin, {
-            rightClick = true,
-            unmarkName = pin.key == MM.minimapKey and pin.vendor.name or nil,
-        })
-    else
-        HideTargetButton()
-    end
+    pin.stacked = #OverlappingPins(pin)
+    MM:ShowVendorTooltip(pin, pin.key, pin.stacked)
+    AttachPinTargeting(pin)
     tracker:Show()
 end
+
+local modifierEvents = CreateFrame("Frame")
+modifierEvents:RegisterEvent("MODIFIER_STATE_CHANGED")
+modifierEvents:SetScript("OnEvent", function()
+    if not (hovered and UnderWaypoint(hovered.vendor)) then return end
+    if WaypointWanted(hovered) then
+        HideTargetButton()
+        GameTooltip:Hide()
+    else
+        MM:ShowVendorTooltip(hovered, hovered.key, hovered.stacked)
+        AttachPinTargeting(hovered)
+    end
+end)
 
 local elapsed, lastX, lastY, lastScale = 0, nil, nil, nil
 -- Runs while the map is open, so the pin under our waypoint is noticed without its own mouse events
@@ -635,7 +657,7 @@ tracker:SetScript("OnUpdate", function(self, dt)
     local x, y = GetCursorPosition()
     local scale = WorldMapFrame:GetCanvasScale()
     -- The waypoint pin over ours shows its own tooltip when entered; ours takes over again
-    if hovered and UnderWaypoint(hovered.vendor) and not (spread and spread:IsShown())
+    if hovered and UnderWaypoint(hovered.vendor) and not WaypointWanted(hovered) and not (spread and spread:IsShown())
         and not (GameTooltip:IsOwned(hovered) and GameTooltip:IsShown()) then
         MM:ShowVendorTooltip(hovered, hovered.key, hovered.stacked)
     end
