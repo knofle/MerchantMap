@@ -132,17 +132,17 @@ local function Button(text, width)
 end
 
 ------------------------------------------------------------------------------------------------
-Section("Clicking an item or vendor")
+Section("When clicking an item or vendor")
 
-Check("Open the map", "Shows where they are",
+Check("Open the map", "",
     function() return not MM.db.noAutoMap end,
     function(on) MM.db.noAutoMap = not on or nil end)
 
-Check("Minimap marker", "Shows them on the minimap",
+Check("Set minimap marker", "",
     function() return not MM.db.noMinimapPin end,
     function(on) MM:SetMinimapPinShown(on) end)
 
-Check("Waypoint", "Sets a map waypoint on them",
+Check("Set waypoint", "",
     function() return MM.db.autoWaypoint end,
     function(on) MM.db.autoWaypoint = on or nil end)
 
@@ -150,10 +150,10 @@ Check("Waypoint", "Sets a map waypoint on them",
 local MARKERS = { "Star", "Circle", "Diamond", "Triangle", "Moon", "Square", "Cross", "Skull" }
 local function MarkerIcon(i) return "Interface\\TargetingFrame\\UI-RaidTargetingIcon_" .. i end
 
-local markerCheck = Check("Target marker", "",
+local markerCheck = Check("Set target marker", "",
     function() return not MM.db.noRaidMarker end,
     function(on) MM:SetRaidMarkerEnabled(on) end)
-markerCheck:SetWidth(120)
+markerCheck:SetWidth(140)
 
 local dropdown = CreateFrame("Button", nil, panel)
 dropdown:SetSize(130, 22)
@@ -171,9 +171,6 @@ local ddArrow = dropdown:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSma
 ddArrow:SetPoint("RIGHT", -7, 0)
 ddArrow:SetText("v")
 
-local markerNote = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
-markerNote:SetPoint("LEFT", dropdown, "RIGHT", 10, 0)
-markerNote:SetText("Targets them and marks them with it")
 
 local function UpdateDropdown()
     local i = MM.db.raidMarker or 8
@@ -230,7 +227,6 @@ scroll:HookScript("OnVerticalScroll", function() list:Hide() end)
 function markerCheck:OnUpdate(on)
     dropdown:SetEnabled(on)
     dropdown:SetAlpha(on and 1 or 0.4)
-    markerNote:SetAlpha(on and 1 or 0.4)
     if not on then list:Hide() end
 end
 
@@ -238,11 +234,11 @@ end
 Section("Direction arrow")
 local arrowTop = y
 
-Check("Show the arrow", "Points to the marked vendor",
+Check("Show", "",
     function() return not MM.db.arrowHidden end,
     function(on) MM:SetArrowShown(on) end)
 
-Check("Lock position", "So it can't be dragged by accident",
+Check("Lock position", "",
     function() return MM.db.arrowLocked end,
     function(on) MM.db.arrowLocked = on or nil end)
 
