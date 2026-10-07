@@ -50,20 +50,20 @@ title:SetPoint("TOPLEFT", 16, -16)
 title:SetText("Merchant Map")
 title:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
 
--- Layout runs top to bottom from here
-local y = -52
+-- Layout runs top to bottom from here, in the column at x (colWidth nil runs to the right edge)
+local y, x, colWidth = -52, 16, nil
 
 -- Section heading with a thin rule under it
 local function Section(text)
     y = y - 10
     local label = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontNormal")
-    label:SetPoint("TOPLEFT", 16, y)
+    label:SetPoint("TOPLEFT", x, y)
     label:SetText(text)
     label:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
     local rule = panel:CreateTexture(nil, "ARTWORK")
     rule:SetHeight(1)
     rule:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -4)
-    rule:SetPoint("RIGHT", panel, "RIGHT", -16, 0)
+    if colWidth then rule:SetWidth(colWidth) else rule:SetPoint("RIGHT", panel, "RIGHT", -16, 0) end
     rule:SetColorTexture(BORDER[1], BORDER[2], BORDER[3], 1)
     y = y - 26
 end
@@ -72,8 +72,8 @@ end
 local checks = {}
 local function Check(text, note, get, set)
     local row = CreateFrame("Button", nil, panel)
-    row:SetSize(360, 22)
-    row:SetPoint("TOPLEFT", 24, y)
+    row:SetSize(colWidth and colWidth - 8 or 360, 22)
+    row:SetPoint("TOPLEFT", x + 8, y)
     y = y - 26
 
     local box = row:CreateTexture(nil, "BORDER")
@@ -131,7 +131,34 @@ local function Button(text, width)
     return b
 end
 
+-- Two sections side by side: start with Columns(), switch with NextColumn(), finish with EndColumns()
+local COL_W, GAP = 280, 24
+
+local function Columns()
+    colWidth = COL_W
+    return y
+end
+
+local function NextColumn(top)
+    local leftBottom = y
+    y, x = top, 16 + COL_W + GAP
+    return leftBottom
+end
+
+-- Draws the line between the columns and carries on below the taller one
+local function EndColumns(top, leftBottom)
+    local bottom = math.min(y, leftBottom)
+    local divider = panel:CreateTexture(nil, "ARTWORK")
+    divider:SetWidth(1)
+    divider:SetPoint("TOPLEFT", 16 + COL_W + GAP / 2, top - 10)
+    divider:SetHeight(top - 10 - bottom)
+    divider:SetColorTexture(BORDER[1], BORDER[2], BORDER[3], 1)
+    y, x, colWidth = bottom, 16, nil
+end
+
 ------------------------------------------------------------------------------------------------
+-- When clicking on the left, Minimap on the right
+local clickTop = Columns()
 Section("When clicking an item or vendor")
 
 Check("Open the map", "",
@@ -172,9 +199,6 @@ ddArrow:SetPoint("RIGHT", -7, 0)
 ddArrow:SetText("v")
 
 
-local markerNote = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
-markerNote:SetPoint("LEFT", dropdown, "RIGHT", 10, 0)
-markerNote:SetText("When close enough to target the NPC")
 
 local function UpdateDropdown()
     local i = MM.db.raidMarker or 8
@@ -231,72 +255,60 @@ scroll:HookScript("OnVerticalScroll", function() list:Hide() end)
 function markerCheck:OnUpdate(on)
     dropdown:SetEnabled(on)
     dropdown:SetAlpha(on and 1 or 0.4)
-    markerNote:SetAlpha(on and 1 or 0.4)
     if not on then list:Hide() end
 end
 
-------------------------------------------------------------------------------------------------
-Section("Direction arrow")
-local arrowTop = y
+local clickBottom = NextColumn(clickTop)
+Section("Minimap")
 
-Check("Show", "When on this continent",
-    function() return not MM.db.arrowHidden end,
-    function(on) MM:SetArrowShown(on) end)
+Check("Minimap button", "Left-click opens Merchant Map",
+    function() return not (MM.db.minimapButton and MM.db.minimapButton.hide) end,
+    function(on) MM:SetMinimapButtonShown(on) end)
 
-Check("Lock position", "",
-    function() return MM.db.arrowLocked end,
-    function(on) MM.db.arrowLocked = on or nil end)
+EndColumns(clickTop, clickBottom)
 
--- Size slider, 50% to 200%
-local sizeLabel = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlight")
-sizeLabel:SetPoint("TOPLEFT", 24, y - 4)
-sizeLabel:SetText("Size")
-y = y - 30
+-- Slider in the addon's style, its value shown as a percentage
+local function Slider(text, min, max, step, onChange)
+    local label = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlight")
+    label:SetPoint("TOPLEFT", x + 8, y - 4)
+    label:SetText(text)
+    y = y - 30
 
-local slider = CreateFrame("Slider", nil, panel)
-slider:SetSize(160, 14)
-slider:SetPoint("LEFT", sizeLabel, "RIGHT", 12, 0)
-slider:SetOrientation("HORIZONTAL")
-slider:SetMinMaxValues(0.5, 2)
-slider:SetValueStep(0.1)
-slider:SetObeyStepOnDrag(true)
-slider:EnableMouseWheel(true)
-local track = slider:CreateTexture(nil, "BACKGROUND")
-track:SetPoint("LEFT")
-track:SetPoint("RIGHT")
-track:SetHeight(4)
-track:SetColorTexture(BORDER[1], BORDER[2], BORDER[3], 1)
-local thumb = slider:CreateTexture(nil, "ARTWORK")
-thumb:SetSize(8, 14)
-thumb:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 1)
-slider:SetThumbTexture(thumb)
+    local slider = CreateFrame("Slider", nil, panel)
+    slider:SetSize(120, 14)
+    slider:SetPoint("LEFT", label, "RIGHT", 12, 0)
+    slider:SetOrientation("HORIZONTAL")
+    slider:SetMinMaxValues(min, max)
+    slider:SetValueStep(step)
+    slider:SetObeyStepOnDrag(true)
+    slider:EnableMouseWheel(true)
+    local track = slider:CreateTexture(nil, "BACKGROUND")
+    track:SetPoint("LEFT")
+    track:SetPoint("RIGHT")
+    track:SetHeight(4)
+    track:SetColorTexture(BORDER[1], BORDER[2], BORDER[3], 1)
+    local thumb = slider:CreateTexture(nil, "ARTWORK")
+    thumb:SetSize(8, 14)
+    thumb:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 1)
+    slider:SetThumbTexture(thumb)
 
-local sizeValue = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
-sizeValue:SetPoint("LEFT", slider, "RIGHT", 10, 0)
-
--- Preview at the chosen size, off to the right so the largest size doesn't cover other options
-local preview = panel:CreateTexture(nil, "ARTWORK")
-preview:SetPoint("CENTER", panel, "TOPLEFT", 520, (arrowTop + y) / 2)
-preview:SetTexture(MM.ARROW_TEXTURE)
-preview:SetVertexColor(0.35, 0.85, 0.35)
-
-slider:SetScript("OnValueChanged", function(_, value)
-    value = math.floor(value * 10 + 0.5) / 10
-    sizeValue:SetText(("%d%%"):format(value * 100))
-    preview:SetSize(56 * value, 56 * value)
-    MM:SetArrowSize(value)
-end)
-slider:SetScript("OnMouseWheel", function(self, delta)
-    self:SetValue(self:GetValue() + delta * 0.1)
-end)
-
-------------------------------------------------------------------------------------------------
-Section("Window")
+    local shown = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
+    shown:SetPoint("LEFT", slider, "RIGHT", 10, 0)
+    slider:SetScript("OnValueChanged", function(_, value)
+        value = math.floor(value / step + 0.5) * step
+        shown:SetText(("%d%%"):format(value * 100 + 0.5))
+        onChange(value)
+    end)
+    slider:SetScript("OnMouseWheel", function(self, delta)
+        self:SetValue(self:GetValue() + delta * step)
+    end)
+    return slider
+end
 
 -- Text dropdown: choices are { value, label } pairs
 local function Dropdown(text, choices, get, set)
     local label = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlight")
-    label:SetPoint("TOPLEFT", 24, y - 4)
+    label:SetPoint("TOPLEFT", x + 8, y - 4)
     label:SetText(text)
     y = y - 30
 
@@ -360,53 +372,41 @@ local function Dropdown(text, choices, get, set)
     return Update
 end
 
+------------------------------------------------------------------------------------------------
+-- Window on the left, Direction arrow on the right
+local top = Columns()
+Section("Window")
+
+local scaleSlider = Slider("Scale", 0.75, 1.5, 0.05, function(value) MM:SetWindowScale(value) end)
+
 local UpdateTooltipDropdown = Dropdown("Tooltip position", {
     { "top", "Top" }, { "left", "Left" }, { "right", "Right" }, { "below", "Below" }, { "mouse", "Mouse" },
 }, function() return MM.db.tooltipAnchor or "below" end,
    function(value) MM.db.tooltipAnchor = value ~= "below" and value or nil end)
+local leftBottom = NextColumn(top)
+Section("Direction arrow")
+local arrowTop = y
 
--- Window scale slider, 75% to 150%
-local scaleLabel = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlight")
-scaleLabel:SetPoint("TOPLEFT", 24, y - 4)
-scaleLabel:SetText("Scale")
-y = y - 30
+Check("Show", "When on this continent",
+    function() return not MM.db.arrowHidden end,
+    function(on) MM:SetArrowShown(on) end)
 
-local scaleSlider = CreateFrame("Slider", nil, panel)
-scaleSlider:SetSize(160, 14)
-scaleSlider:SetPoint("LEFT", scaleLabel, "RIGHT", 12, 0)
-scaleSlider:SetOrientation("HORIZONTAL")
-scaleSlider:SetMinMaxValues(0.75, 1.5)
-scaleSlider:SetValueStep(0.05)
-scaleSlider:SetObeyStepOnDrag(true)
-scaleSlider:EnableMouseWheel(true)
-local scaleTrack = scaleSlider:CreateTexture(nil, "BACKGROUND")
-scaleTrack:SetPoint("LEFT")
-scaleTrack:SetPoint("RIGHT")
-scaleTrack:SetHeight(4)
-scaleTrack:SetColorTexture(BORDER[1], BORDER[2], BORDER[3], 1)
-local scaleThumb = scaleSlider:CreateTexture(nil, "ARTWORK")
-scaleThumb:SetSize(8, 14)
-scaleThumb:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 1)
-scaleSlider:SetThumbTexture(scaleThumb)
+Check("Lock position", "",
+    function() return MM.db.arrowLocked end,
+    function(on) MM.db.arrowLocked = on or nil end)
 
-local scaleValue = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
-scaleValue:SetPoint("LEFT", scaleSlider, "RIGHT", 10, 0)
+-- Size, with a preview at the chosen size beside the options
+local preview = panel:CreateTexture(nil, "ARTWORK")
+preview:SetTexture(MM.ARROW_TEXTURE)
+preview:SetVertexColor(0.35, 0.85, 0.35)
 
-scaleSlider:SetScript("OnValueChanged", function(_, value)
-    value = math.floor(value * 20 + 0.5) / 20
-    scaleValue:SetText(("%d%%"):format(value * 100 + 0.5))
-    MM:SetWindowScale(value)
+local slider = Slider("Size", 0.5, 2, 0.1, function(value)
+    preview:SetSize(56 * value, 56 * value)
+    MM:SetArrowSize(value)
 end)
-scaleSlider:SetScript("OnMouseWheel", function(self, delta)
-    self:SetValue(self:GetValue() + delta * 0.05)
-end)
+preview:SetPoint("CENTER", panel, "TOPLEFT", x + COL_W - 25, (arrowTop + y) / 2)
 
-------------------------------------------------------------------------------------------------
-Section("Minimap")
-
-Check("Minimap button", "Left-click opens Merchant Map",
-    function() return not (MM.db.minimapButton and MM.db.minimapButton.hide) end,
-    function(on) MM:SetMinimapButtonShown(on) end)
+EndColumns(top, leftBottom)
 
 ------------------------------------------------------------------------------------------------
 Section("Sharing")
