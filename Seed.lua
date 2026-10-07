@@ -2,8 +2,8 @@ local _, MM = ...
 
 MM.services = {}
 
--- Adds Classic vendors and their stock for vendors not visited yet, flagged unverified.
--- Also adds the verified data shipped in VerifiedData.lua.
+-- Adds the Classic vendors and their stock (VendorData.lua), and the data shipped in VerifiedData.lua.
+-- Vendors you've visited keep your prices and position, and get any Classic items you haven't seen.
 -- Seeds are rebuilt every login and stripped on logout, so saved data only holds what you have seen.
 
 -- Zone maps by name, for resolving Classic area IDs to uiMapIDs
@@ -77,7 +77,7 @@ local function ConfirmedSpot(key)
 end
 
 -- Service NPCs (trainers, flight masters, innkeepers...) live only in memory: MM.services["s" .. npcID].
--- They start unverified with their Classic location; verified ones (yours or shipped) use the verified position.
+-- They use their Classic location until confirmed (by you or shipped), then the confirmed position.
 function MM:RefreshServices()
     self.services = {}
     for npcID, v in pairs(self.knownServices) do
@@ -90,7 +90,7 @@ function MM:RefreshServices()
             if seen then
                 npc.name, npc.mapID, npc.x, npc.y, npc.verifiedAt = seen.name, seen.mapID, seen.x, seen.y, seen.t
             else
-                npc.mapID, npc.x, npc.y, npc.unverified = AreaMap(v[4]), v[5] / 100, v[6] / 100, true
+                npc.mapID, npc.x, npc.y = AreaMap(v[4]), v[5] / 100, v[6] / 100
             end
             if npc.mapID then self.services[key] = npc end
         end
@@ -210,11 +210,10 @@ local function FindNPC(list, key, name, zone, filter)
     end
 end
 
-local function IsClassicSeed(vendor) return vendor.unverified end
+local function IsClassicSeed(vendor) return vendor.classic end
 
 -- Talking to an NPC (or opening their trainer, flight map, bank...) confirms where they stand.
--- Service NPCs become verified; Classic vendors whose shop you can't open get their position updated,
--- while their stock stays unverified until you do.
+-- Service NPCs and Classic vendors whose shop you can't open get their position updated.
 local function ConfirmNPC(unit, event, kind)
     local name = UnitName(unit)
     if not name or (issecretvalue and issecretvalue(name)) then return end
@@ -240,8 +239,8 @@ local function ConfirmNPC(unit, event, kind)
             name = name, mapID = mapID, x = x, y = y, t = now,
             paths = isNew and npc.paths or nil, faction = isNew and npc.faction or nil, title = isNew and npc.title or nil,
         }
-        changed = npc.unverified
-        npc.name, npc.mapID, npc.x, npc.y, npc.unverified, npc.verifiedAt = name, mapID, x, y, nil, now
+        changed = true
+        npc.name, npc.mapID, npc.x, npc.y, npc.verifiedAt = name, mapID, x, y, now
     elseif npcID and NewServicePath(unit, event, kind) then
         -- A service NPC the Classic data doesn't have
         local side = UnitFactionGroup(unit)
@@ -261,22 +260,19 @@ local function ConfirmNPC(unit, event, kind)
         npc.mapID, npc.x, npc.y, npc.located = mapID, x, y, now
     end
 
-    if changed then
-        MM:OnDataChanged()
-        MM:PointToNextUnverified()
-    end
+    if changed then MM:OnDataChanged() end
 end
 
-local verifyEvents = CreateFrame("Frame")
+local confirmEvents = CreateFrame("Frame")
 for _, event in ipairs({
     "GOSSIP_SHOW", "TRAINER_SHOW", "TAXIMAP_OPENED", "BANKFRAME_OPENED", "AUCTION_HOUSE_SHOW",
     "PET_STABLE_SHOW", "BATTLEFIELDS_SHOW", "GUILD_REGISTRAR_SHOW", "MERCHANT_SHOW",
     "PLAYER_INTERACTION_MANAGER_FRAME_SHOW", "TRANSMOGRIFY_OPEN",
 }) do
     -- Not every client has every event
-    pcall(verifyEvents.RegisterEvent, verifyEvents, event)
+    pcall(confirmEvents.RegisterEvent, confirmEvents, event)
 end
-verifyEvents:SetScript("OnEvent", function(_, event, kind) ConfirmNPC("npc", event, kind) end)
+confirmEvents:SetScript("OnEvent", function(_, event, kind) ConfirmNPC("npc", event, kind) end)
 
 -- Some NPCs won't talk to you at all (stable masters to non-hunters), so targeting one
 -- within about 10 yards confirms them too. Walking up to a target from afar counts.
@@ -312,101 +308,126 @@ targetEvents:SetScript("OnEvent", function()
     end)
 end)
 
--- Your own vendors set aside while newer shipped data is shown; put back on logout
-local setAside = {}
+-- Holidays are only shown when turned on in the options
+local function HolidayOff(holiday)
+    return holiday ~= nil and not MM.db.holidays[holiday]
+end
 
--- Verified vendors shipped with the addon (VerifiedData.lua). Shown when newer than your own visit,
+-- Holiday vendors are keyed by where they stand, npcID .. "@" .. areaID, since some show up
+-- in several places (the Darkmoon Faire alternates between Elwynn Forest and Mulgore)
+local function SpotKey(npcID, spot) return npcID .. "@" .. spot[2] end
+
+local function KeyHoliday(key)
+    if not key then return end
+    local npcID, area = tostring(key):match("^(%d+)@(%d+)$")
+    local spots = MM.holidaySpots[tonumber(npcID or key)]
+    for _, spot in ipairs(spots or {}) do
+        if not area or spot[2] == tonumber(area) then return spot[1] end
+    end
+end
+
+-- Key for a vendor you're at: the holiday spot in your zone, or just the NPC ID
+function MM:VendorSpotKey(npcID, mapID)
+    local spots = type(npcID) == "number" and self.holidaySpots[npcID]
+    if not spots then return npcID end
+    local zone = self:ZoneOf(mapID)
+    for _, spot in ipairs(spots) do
+        if AreaMap(spot[2]) == zone then return SpotKey(npcID, spot) end
+    end
+    return SpotKey(npcID, spots[1])
+end
+
+-- Your own vendors and items taken out for the session (newer shipped data, holidays turned off);
+-- put back on logout
+local setAside, hiddenItems = {}, {}
+
+local function SetAside(db, key)
+    local vendor, offers = db.vendors[key], {}
+    for itemID in pairs(vendor.items) do
+        local item = db.items[itemID]
+        if item and item.vendors[key] then
+            offers[itemID] = item.vendors[key]
+            item.vendors[key] = nil
+        end
+    end
+    setAside[key] = { vendor = vendor, offers = offers }
+    db.vendors[key] = nil
+end
+
+local function HideHolidays(db)
+    for key, vendor in pairs(db.vendors) do
+        if HolidayOff(KeyHoliday(key) or KeyHoliday(vendor.seedID)) then SetAside(db, key) end
+    end
+    -- Holiday items, and items only those vendors sell
+    for itemID, item in pairs(db.items) do
+        if HolidayOff(MM.holidayItems[itemID]) or not next(item.vendors) then
+            hiddenItems[itemID] = item
+            db.items[itemID] = nil
+        end
+    end
+end
+
+-- Vendors shipped with the addon (VerifiedData.lua). Shown when newer than your own visit,
 -- without touching your saved data.
 local function SeedShipped(db)
     for key, v in pairs(MM.shippedVendors) do
         local name, mapID, x, y, seen, stock, seedID = unpack(v)
         local mine = db.vendors[key]
-        local classic = MM.knownVendors[key] or (seedID and MM.knownVendors[seedID])
+        local base = tonumber(tostring(seedID or key):match("^(%d+)@"))
+        local classic = MM.knownVendors[base or seedID or key]
         local sameFaction = not classic or classic[3]:find(faction, 1, true)
-        if sameFaction and not (mine and (mine.lastSeen or 0) >= seen) then
-            if mine then
-                local offers = {}
-                for itemID in pairs(mine.items) do
-                    local item = db.items[itemID]
-                    if item and item.vendors[key] then
-                        offers[itemID] = item.vendors[key]
-                        item.vendors[key] = nil
-                    end
-                end
-                setAside[key] = { vendor = mine, offers = offers }
-            end
+        local holidayOff = HolidayOff(KeyHoliday(key) or KeyHoliday(seedID))
+        if sameFaction and not holidayOff and not (mine and (mine.lastSeen or 0) >= seen) then
+            if mine then SetAside(db, key) end
             local vendor = { name = name, mapID = mapID, x = x, y = y, lastSeen = seen, seedID = seedID, items = {}, shipped = true }
             db.vendors[key] = vendor
             for itemID, offer in pairs(stock) do
-                local item = db.items[itemID]
-                if not item then
-                    item = {
-                        name = C_Item.GetItemNameByID(itemID) or MM.shippedItemNames[itemID],
-                        icon = C_Item.GetItemIconByID(itemID),
-                        vendors = {},
-                    }
-                    db.items[itemID] = item
+                if not HolidayOff(MM.holidayItems[itemID]) then
+                    local item = db.items[itemID]
+                    if not item then
+                        item = {
+                            name = C_Item.GetItemNameByID(itemID) or MM.shippedItemNames[itemID],
+                            icon = C_Item.GetItemIconByID(itemID),
+                            vendors = {},
+                        }
+                        db.items[itemID] = item
+                    end
+                    item.vendors[key] = { price = offer[1], cost = offer[2], limited = offer[3], pvp = offer[4], shipped = true }
+                    vendor.items[itemID] = true
+                    MM:QueueAutoCategorize(itemID)
                 end
-                item.vendors[key] = { price = offer[1], cost = offer[2], limited = offer[3], pvp = offer[4], shipped = true }
-                vendor.items[itemID] = true
-                MM:QueueAutoCategorize(itemID)
+            end
+            -- Your items the shipped data doesn't have stay listed
+            for itemID, offer in pairs(setAside[key] and setAside[key].offers or {}) do
+                if not vendor.items[itemID] and db.items[itemID] then
+                    db.items[itemID].vendors[key] = offer
+                    vendor.items[itemID] = true
+                end
             end
         end
     end
 end
 
-local function Seed()
-    local db = MM.db
-    byName, areaMaps = ZoneMapsByName(), {}
-    faction = UnitFactionGroup("player") == "Horde" and "H" or "A"
-    SeedShipped(db)
-
-    -- Visited vendors whose in-game ID differed from the Classic one
-    local adopted = {}
-    for _, vendor in pairs(db.vendors) do
-        if vendor.seedID then adopted[vendor.seedID] = true end
-    end
-
-    MM:RefreshServices()
-    for npcID, v in pairs(MM.knownVendors) do
-        if not db.vendors[npcID] and not adopted[npcID] and v[3]:find(faction, 1, true) then
-            local mapID = AreaMap(v[4])
-            local vendor = { name = v[1], title = v[2], items = {}, unverified = true }
-            if mapID then vendor.mapID, vendor.x, vendor.y = mapID, v[5] / 100, v[6] / 100 end
-            -- Position confirmed by talking to them, even if their shop wouldn't open
-            local spot = ConfirmedSpot(npcID)
-            if spot then vendor.mapID, vendor.x, vendor.y, vendor.located = spot.mapID, spot.x, spot.y, spot.t end
-            db.vendors[npcID] = vendor
-
-            for _, itemID in ipairs(v[7]) do
-                local item = db.items[itemID]
-                if not item then
-                    item = {
-                        name = C_Item.GetItemNameByID(itemID) or MM.knownItemNames[itemID],
-                        icon = C_Item.GetItemIconByID(itemID),
-                        vendors = {},
-                    }
-                    db.items[itemID] = item
-                end
-                item.vendors[npcID] = { unverified = true }
-                vendor.items[itemID] = true
-                MM:QueueAutoCategorize(itemID)
-            end
-        end
-    end
-end
-
+-- Removes everything seeded, so saved data only holds what you have seen
 local function Strip()
     local db = MM.db
     for key, vendor in pairs(db.vendors) do
-        if vendor.unverified or vendor.shipped then db.vendors[key] = nil end
+        if vendor.classic or vendor.shipped then db.vendors[key] = nil end
     end
     for _, item in pairs(db.items) do
         for key, offer in pairs(item.vendors) do
-            if offer.unverified or offer.shipped then item.vendors[key] = nil end
+            if offer.classic or offer.shipped then item.vendors[key] = nil end
         end
     end
-    -- Your own vendors come back, unless you visited them again this session
+    -- What was set aside comes back, unless you saw it again this session
+    for itemID, item in pairs(hiddenItems) do
+        local current = db.items[itemID]
+        if current then
+            for key, offer in pairs(item.vendors) do current.vendors[key] = current.vendors[key] or offer end
+        else
+            db.items[itemID] = item
+        end
+    end
     for key, saved in pairs(setAside) do
         if not db.vendors[key] then
             db.vendors[key] = saved.vendor
@@ -416,9 +437,111 @@ local function Strip()
             end
         end
     end
+    wipe(setAside)
+    wipe(hiddenItems)
+    -- Your vendors lose the Classic items added to them
+    for key, vendor in pairs(db.vendors) do
+        for itemID in pairs(vendor.items) do
+            local item = db.items[itemID]
+            if not (item and item.vendors[key]) then vendor.items[itemID] = nil end
+        end
+    end
     for itemID, item in pairs(db.items) do
         if not next(item.vendors) then db.items[itemID] = nil end
     end
+end
+
+-- Classic items the vendor sells, without a price, for those not recorded already
+local function AddClassicItems(db, key, vendor, itemIDs)
+    for _, itemID in ipairs(itemIDs) do
+        if not HolidayOff(MM.holidayItems[itemID]) then
+            local item = db.items[itemID]
+            if not item then
+                item = {
+                    name = C_Item.GetItemNameByID(itemID) or MM.knownItemNames[itemID],
+                    icon = C_Item.GetItemIconByID(itemID),
+                    vendors = {},
+                }
+                db.items[itemID] = item
+            end
+            if not item.vendors[key] then
+                item.vendors[key] = { classic = true }
+                vendor.items[itemID] = true
+                MM:QueueAutoCategorize(itemID)
+            end
+        end
+    end
+end
+
+-- A Classic vendor, or its items added to your record of them
+local function SeedClassic(db, recorded, seedKey, v, areaID, x, y)
+    local key = recorded[seedKey] or seedKey
+    local vendor = db.vendors[key]
+    if not vendor then
+        vendor = { name = v[1], title = v[2], items = {}, classic = true }
+        local mapID = AreaMap(areaID)
+        if mapID then vendor.mapID, vendor.x, vendor.y = mapID, x / 100, y / 100 end
+        -- Position confirmed by talking to them, even if their shop wouldn't open
+        local spot = ConfirmedSpot(seedKey)
+        if spot then vendor.mapID, vendor.x, vendor.y, vendor.located = spot.mapID, spot.x, spot.y, spot.t end
+        db.vendors[key] = vendor
+    end
+    AddClassicItems(db, key, vendor, v[7])
+end
+
+local function Seed()
+    local db = MM.db
+    byName, areaMaps = ZoneMapsByName(), {}
+    faction = UnitFactionGroup("player") == "Horde" and "H" or "A"
+    HideHolidays(db)
+    SeedShipped(db)
+
+    -- Recorded vendors (yours or shipped), by the Classic ID they stand for
+    local recorded = {}
+    for key, vendor in pairs(db.vendors) do recorded[vendor.seedID or key] = key end
+
+    MM:RefreshServices()
+    for npcID, v in pairs(MM.knownVendors) do
+        if v[3]:find(faction, 1, true) then
+            local spots = MM.holidaySpots[npcID]
+            if spots then
+                for _, spot in ipairs(spots) do
+                    if not HolidayOff(spot[1]) then
+                        SeedClassic(db, recorded, SpotKey(npcID, spot), v, spot[2], spot[3], spot[4])
+                    end
+                end
+            else
+                SeedClassic(db, recorded, npcID, v, v[4], v[5], v[6])
+            end
+        end
+    end
+end
+
+-- Holidays in the data, in calendar order
+MM.HOLIDAYS = {}
+for _, holiday in ipairs({
+    "Lunar Festival", "Love is in the Air", "Noblegarden", "Children's Week", "Midsummer Fire Festival",
+    "Harvest Festival", "Brewfest", "Hallow's End", "Feast of Winter Veil",
+    "Darkmoon Faire (Elwynn Forest)", "Darkmoon Faire (Mulgore)",
+}) do
+    local found = false
+    for _, spots in pairs(MM.holidaySpots) do
+        for _, spot in ipairs(spots) do found = found or spot[1] == holiday end
+    end
+    for _, h in pairs(MM.holidayItems) do found = found or h == holiday end
+    if found then MM.HOLIDAYS[#MM.HOLIDAYS + 1] = holiday end
+end
+
+function MM:IsHolidayShown(holiday)
+    return self.db.holidays[holiday] == true
+end
+
+-- Turning a holiday on or off seeds everything again
+function MM:SetHolidayShown(holiday, on)
+    self.db.holidays[holiday] = on or nil
+    Strip()
+    Seed()
+    self:OnDataChanged()
 end
 
 local events = CreateFrame("Frame")

@@ -61,6 +61,31 @@ local function PosOnMap(vendor, mapID)
     if rect then return rect[1] + vendor.x * rect[2], rect[3] + vendor.y * rect[4] end
 end
 
+-- Where an NPC stands in world coordinates (yards, same axes as UnitPosition), worked out once per spot
+local worldPos = setmetatable({}, { __mode = "k" })
+local function WorldPos(npc)
+    local cached = worldPos[npc]
+    if not (cached and cached.mapID == npc.mapID and cached.x == npc.x and cached.y == npc.y) then
+        cached = { mapID = npc.mapID, x = npc.x, y = npc.y }
+        if npc.mapID then
+            local instance, pos = C_Map.GetWorldPosFromMapPos(npc.mapID, CreateVector2D(npc.x, npc.y))
+            if pos then cached.instance, cached.north, cached.west = instance, pos:GetXY() end
+        end
+        worldPos[npc] = cached
+    end
+    return cached
+end
+
+-- Yards north and west from you to the NPC, or nil when they aren't on your continent.
+-- Read every frame by the arrow and minimap marker, so it avoids the map APIs that create tables.
+function MM:VectorTo(npc)
+    local py, px, _, instance = UnitPosition("player")
+    if not py or (issecretvalue and issecretvalue(py)) then return end
+    local pos = WorldPos(npc)
+    if not pos.north or pos.instance ~= instance then return end
+    return pos.north - py, pos.west - px
+end
+
 -- Pin styling and actions -------------------------------------------------------
 
 local PIN = "MerchantMapPinTemplate"
@@ -70,11 +95,9 @@ local C = MM.COLORS
 local ACCENT, BORDER = C.accent, C.border
 
 local PIN_STYLES = {
-    visited = { ring = { 0.85, 0.68, 0.2 }, icon = { 1, 1, 1 }, desaturate = false, alpha = 1 },
-    unvisited = { ring = { 0.9, 0.15, 0.1 }, icon = { 1, 0.35, 0.3 }, desaturate = true, alpha = 1 },
+    vendor = { ring = { 0.85, 0.68, 0.2 }, icon = { 1, 1, 1 }, desaturate = false, alpha = 1 },
     hidden = { ring = { 0.4, 0.4, 0.4 }, icon = { 0.6, 0.6, 0.6 }, desaturate = true, alpha = 0.7 },
     service = { ring = { 0.45, 0.72, 0.78 }, icon = { 1, 1, 1 }, desaturate = false, alpha = 1 },
-    serviceUnverified = { ring = { 0.9, 0.15, 0.1 }, icon = { 1, 1, 1 }, desaturate = false, alpha = 1 },
 }
 
 -- Works on map pins and spread buttons, which share Ring/Icon textures
@@ -86,7 +109,7 @@ local function ApplyStyle(frame, state)
     frame:SetAlpha(style.alpha)
 end
 
-local NAME_COLORS = { service = { 0.55, 0.85, 0.9 }, serviceUnverified = { 1, 0.35, 0.3 }, visited = { 0.86, 0.80, 0.70 }, unvisited = { 1, 0.35, 0.3 }, hidden = { 0.6, 0.6, 0.6 } }
+local NAME_COLORS = { service = { 0.55, 0.85, 0.9 }, vendor = { 0.86, 0.80, 0.70 }, hidden = { 0.6, 0.6, 0.6 } }
 
 local spread
 
@@ -103,10 +126,7 @@ local function PinAction(frame)
         GameTooltip:Hide()
         -- Stack list rows update in place so the list stays open
         if frame.name then
-            local v = frame.vendor
-            frame.state = hide and "hidden"
-                or (v.service and (v.unverified and "serviceUnverified" or "service"))
-                or (v.unverified and "unvisited" or "visited")
+            frame.state = hide and "hidden" or (frame.vendor.service and "service" or "vendor")
             StyleRow(frame)
         end
         MM:RefreshMap()
@@ -281,6 +301,7 @@ local markEvents = CreateFrame("Frame")
 markEvents:RegisterEvent("RAID_TARGET_UPDATE")
 markEvents:RegisterEvent("PLAYER_TARGET_CHANGED")
 markEvents:SetScript("OnEvent", function(_, event)
+    if not MM.debug then return end
     local name, icon = TargetMark()
     Debug(event, "target:", tostring(name), "icon:", tostring(icon), "lastMarked:", tostring(lastMarked))
 end)
@@ -549,12 +570,21 @@ local function MouseOnPins()
     return focus and focus.GetMap and focus.key ~= nil
 end
 
+-- The waypoint we placed sits on top of its vendor's pin and takes the mouse,
+-- so that pin counts as hovered whatever is over it. Matched by spot, as data refreshes make new tables.
+local function UnderWaypoint(vendor)
+    local w = MM.waypointVendor
+    return w and vendor.name == w.name and vendor.mapID == w.mapID and vendor.x == w.x and vendor.y == w.y
+end
+
 local function NearestPin()
-    if not (WorldMapFrame:IsVisible() and MouseOnPins()) then return end
+    if not WorldMapFrame:IsVisible() then return end
+    local onPins = MouseOnPins()
+    if not (onPins or MM.waypointVendor) then return end
     local x, y = GetCursorPosition()
     local best, bestDist
     for pin in WorldMapFrame:EnumeratePinsByTemplate(PIN) do
-        if pin:IsVisible() and pin:IsMouseOver() then
+        if pin:IsVisible() and pin:IsMouseOver() and (onPins or UnderWaypoint(pin.vendor)) then
             local px, py = ScreenCenter(pin)
             local dist = (px - x) ^ 2 + (py - y) ^ 2
             if not bestDist or dist < bestDist then best, bestDist = pin, dist end
@@ -572,13 +602,13 @@ local function SetHovered(pin)
     hovered = pin
     if not pin then
         HideTargetButton()
-        tracker:Hide()
         return
     end
 
     RaisePin(pin, true)
     local stacked = #OverlappingPins(pin)
     MM:ShowVendorTooltip(pin, pin.key, stacked)
+    pin.stacked = stacked
     -- Stacked pins keep their plain click for the overlap list
     if stacked == 1 then
         AttachTargetButton(pin, {
@@ -592,14 +622,25 @@ local function SetHovered(pin)
 end
 
 local elapsed, lastX, lastY, lastScale = 0, nil, nil, nil
-tracker:SetScript("OnUpdate", function(_, dt)
+-- Runs while the map is open, so the pin under our waypoint is noticed without its own mouse events
+tracker:SetScript("OnUpdate", function(self, dt)
     elapsed = elapsed + dt
     if elapsed < 0.05 then return end
     elapsed = 0
-    -- Nothing to recheck while the cursor and zoom stay put
+    if not WorldMapFrame:IsVisible() then
+        SetHovered(nil)
+        self:Hide()
+        return
+    end
     local x, y = GetCursorPosition()
     local scale = WorldMapFrame:GetCanvasScale()
-    if hovered and x == lastX and y == lastY and scale == lastScale then return end
+    -- The waypoint pin over ours shows its own tooltip when entered; ours takes over again
+    if hovered and UnderWaypoint(hovered.vendor) and not (spread and spread:IsShown())
+        and not (GameTooltip:IsOwned(hovered) and GameTooltip:IsShown()) then
+        MM:ShowVendorTooltip(hovered, hovered.key, hovered.stacked)
+    end
+    -- Nothing to recheck while the cursor, zoom and pins stay put
+    if x == lastX and y == lastY and scale == lastScale then return end
     lastX, lastY, lastScale = x, y, scale
     SetHovered(NearestPin())
     -- Follow the pin if the map is zoomed or panned under the cursor
@@ -663,41 +704,18 @@ end
 
 local function PinState(key, vendor)
     if MM.db.hiddenVendors[key] then return "hidden" end
-    if vendor.service then return vendor.unverified and "serviceUnverified" or "service" end
-    return vendor.unverified and "unvisited" or "visited"
+    return vendor.service and "service" or "vendor"
 end
 
--- Search results or all visited vendors (Vendors), plus unvisited (Unvisited Vendors) and hidden (Show hidden)
--- /mm unverified: only the vendors and service NPCs you still need to talk to
-local function UnverifiedNPCs()
-    local db = MM.db
-    local pinned = {}
-    for key, vendor in pairs(db.vendors) do
-        if vendor.unverified and not vendor.located then pinned[key] = true end
-    end
-    for key, npc in pairs(MM.services) do
-        if npc.unverified then pinned[key] = true end
-    end
-    for key in pairs(pinned) do
-        if db.hiddenVendors[key] and not db.showHidden then pinned[key] = nil end
-    end
-    return pinned
-end
-
+-- Search results or all vendors (Vendors), plus hidden ones (Show hidden)
 local function PinnedVendors()
     local db = MM.db
     local pinned = {}
-    if MM.verifyMode then
-        pinned = UnverifiedNPCs()
-        if MM.minimapKey and MM:GetNPC(MM.minimapKey) then pinned[MM.minimapKey] = true end
-        return pinned
-    end
     for key, ids in pairs(MM.activeVendors or {}) do pinned[key] = ids end
     for key, vendor in pairs(db.vendors) do
         local state = PinState(key, vendor)
         -- While searching, only vendors selling the matched items are pinned
-        local wanted = not MM.activeVendors and ((state == "visited" and db.showAllVendors)
-            or (state == "unvisited" and db.showUnvisited)
+        local wanted = not MM.activeVendors and ((state == "vendor" and db.showAllVendors)
             or (state == "hidden" and db.showHidden))
         if wanted and not pinned[key] then
             -- Item list is built on first hover, not for every pin
@@ -750,6 +768,7 @@ function Provider:RefreshAllData()
         end
     end
     if marked then marked:SetFrameLevel(math.max(marked:GetFrameLevel(), topPinLevel + 1)) end
+    lastX = nil
     tracker:Show()
 end
 
@@ -760,9 +779,7 @@ local OPTIONS = {
     { text = "Open Merchant Map", note = "Search and browse everything you've recorded.",
       action = function() MM:Toggle() end },
     { text = "Vendors", setting = "showAllVendors", color = { 1, 0.82, 0 },
-      note = "Show every vendor you've visited. While searching in the Merchant Map window, only matching vendors are shown." },
-    { text = "Unvisited Vendors", setting = "showUnvisited", color = { 1, 0.35, 0.3 },
-      note = "Red pins use Classic data and turn into normal vendors once you open their shop." },
+      note = "Show every vendor. While searching in the Merchant Map window, only matching vendors are shown." },
     { text = "Show hidden", setting = "showHidden", color = { 0.75, 0.75, 0.75 },
       note = "Grey pins are vendors you've hidden. Alt-click a pin to hide or enable it." },
 }
@@ -927,20 +944,12 @@ function MM:ShowServiceTooltip(owner, key, stacked, anchor)
     local npc = self.services and self.services[key]
     if not npc then return end
     GameTooltip:SetOwner(owner, anchor or "ANCHOR_RIGHT")
-    if npc.unverified then
-        GameTooltip:AddLine(npc.name, 1, 0.35, 0.3)
-    else
-        GameTooltip:AddLine(npc.name, 0.55, 0.85, 0.9)
-    end
+    GameTooltip:AddLine(npc.name, 0.55, 0.85, 0.9)
     if npc.title then GameTooltip:AddLine("<" .. npc.title .. ">", 0.8, 0.8, 0.8) end
     GameTooltip:AddLine(self:LocationText(npc), 0.8, 0.8, 0.8)
     GameTooltip:AddLine(" ")
     for _, path in ipairs(npc.paths) do
         GameTooltip:AddLine((path:gsub("^Services/", ""):gsub("/", " > ")), 1, 1, 1)
-    end
-    if npc.unverified then
-        GameTooltip:AddLine("Not verified yet. Location is from Classic and may have changed. Talk to them to confirm.",
-            1, 0.35, 0.3, true)
     end
     GameTooltip:AddLine(" ")
     if stacked and stacked > 1 then
@@ -1005,18 +1014,9 @@ function MM:ShowVendorTooltip(owner, key, stacked)
     end
 
     GameTooltip:SetOwner(owner, "ANCHOR_RIGHT")
-    if vendor.unverified then
-        GameTooltip:AddLine(vendor.name, 1, 0.35, 0.3)
-    else
-        GameTooltip:AddLine(vendor.name, 1, 0.82, 0)
-    end
+    GameTooltip:AddLine(vendor.name, 1, 0.82, 0)
     if vendor.title then GameTooltip:AddLine("<" .. vendor.title .. ">", 0.8, 0.8, 0.8) end
     GameTooltip:AddLine(self:LocationText(vendor), 0.8, 0.8, 0.8)
-    if vendor.unverified and vendor.located then
-        GameTooltip:AddLine("Location confirmed. Stock is from Classic and may have changed.", 1, 0.35, 0.3, true)
-    elseif vendor.unverified then
-        GameTooltip:AddLine("Not visited yet. Stock is from Classic and may have changed.", 1, 0.35, 0.3, true)
-    end
     GameTooltip:AddLine(" ")
 
     for i, itemID in ipairs(itemIDs) do
@@ -1057,6 +1057,7 @@ local function PlaceWaypoint(mapID, x, y, name)
 end
 
 function MM:ClearWaypoint()
+    self.waypointVendor = nil
     local wui = WaypointUIAPI and WaypointUIAPI.Navigation
     if wui and wui.ClearUserNavigation and pcall(wui.ClearUserNavigation) then return end
     C_Map.ClearUserWaypoint()
@@ -1071,7 +1072,10 @@ function MM:SetWaypoint(vendor, name)
     while mapID and mapID ~= 0 and depth < 10 do
         if C_Map.CanSetUserWaypointOnMap(mapID) then
             local x, y = PosOnMap(vendor, mapID)
-            if x then PlaceWaypoint(mapID, x, y, name or vendor.name) end
+            if x then
+                PlaceWaypoint(mapID, x, y, name or vendor.name)
+                self.waypointVendor = vendor
+            end
             return
         end
         local info = C_Map.GetMapInfo(mapID)
@@ -1107,8 +1111,8 @@ local function CommonMap(maps)
     return common and common[#common]
 end
 
--- Closest of the keys (NPC key -> value) on your continent. visible(value) can filter them.
-local function ClosestNPC(keys, visible)
+-- Closest of the keys (NPC key -> value) on your continent
+local function ClosestNPC(keys)
     local playerMap = C_Map.GetBestMapForUnit("player")
     local continent = playerMap and Ancestor(playerMap, Enum.UIMapType.Continent)
     local pos = continent and C_Map.GetPlayerMapPosition(continent, "player")
@@ -1118,9 +1122,9 @@ local function ClosestNPC(keys, visible)
     local px, py = pos:GetXY()
 
     local best, bestDist
-    for key, value in pairs(keys) do
+    for key in pairs(keys) do
         local npc = MM:GetNPC(key)
-        local shown = (not visible or visible(value)) and (MM.db.showHidden or not MM.db.hiddenVendors[key])
+        local shown = MM.db.showHidden or not MM.db.hiddenVendors[key]
         local x, y
         if shown and npc then x, y = PosOnMap(npc, continent) end
         if x then
@@ -1131,10 +1135,8 @@ local function ClosestNPC(keys, visible)
     return best
 end
 
-local function OfferVisible(offer) return MM:OfferVisible(offer) end
-
 local function ClosestVendor(item)
-    return ClosestNPC(item.vendors, OfferVisible)
+    return ClosestNPC(item.vendors)
 end
 
 function MM:ClosestVendorKey(itemID)
@@ -1145,30 +1147,6 @@ end
 -- Closest of a set of service NPC keys
 function MM:ClosestServiceKey(keys)
     return ClosestNPC(keys)
-end
-
--- NPCs skipped this session, when they're not where they should be
-MM.skipped = {}
-
--- /mm unverified: marks the nearest NPC you still need to talk to
-function MM:PointToNextUnverified()
-    if not self.verifyMode then return end
-    local keys = UnverifiedNPCs()
-    for key in pairs(self.skipped) do keys[key] = nil end
-    local key = ClosestNPC(keys)
-    if key then
-        self:SetMinimapVendor(self:GetNPC(key), key)
-    else
-        self:ClearMinimapVendor()
-        print("|cffccb084Merchant Map:|r no unverified NPCs left on this continent.")
-    end
-end
-
--- Skips the marked NPC and points to the next one
-function MM:SkipUnverified()
-    if not (self.verifyMode and self.minimapKey) then return end
-    self.skipped[self.minimapKey] = true
-    self:PointToNextUnverified()
 end
 
 -- Opens your zone if a vendor there sells the item, otherwise the smallest map showing all its vendors.
@@ -1233,13 +1211,13 @@ function MM:ShowItemOnMap(itemID)
 end
 
 -- Your zone if one of the NPCs is there, otherwise the smallest map showing them all
-local function OpenMapForNPCs(keys, visible)
+local function OpenMapForNPCs(keys)
     local playerMap = C_Map.GetBestMapForUnit("player")
     local playerZone = playerMap and Ancestor(playerMap, Enum.UIMapType.Zone)
     local zones = {}
-    for key, value in pairs(keys) do
+    for key in pairs(keys) do
         local npc = MM:GetNPC(key)
-        local shown = (not visible or visible(value)) and (MM.db.showHidden or not MM.db.hiddenVendors[key])
+        local shown = MM.db.showHidden or not MM.db.hiddenVendors[key]
         if shown and npc and npc.mapID then
             local zone = Ancestor(npc.mapID, Enum.UIMapType.Zone)
             if zone then zones[zone] = true end
@@ -1252,7 +1230,7 @@ end
 
 function MM:OpenMapForItem(itemID)
     local item = self.db.items[itemID]
-    if item then OpenMapForNPCs(item.vendors, OfferVisible) end
+    if item then OpenMapForNPCs(item.vendors) end
 end
 
 -- A set of service NPCs, like an item's vendors: closest on the minimap, map showing them all

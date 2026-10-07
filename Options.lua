@@ -7,7 +7,7 @@ local ACCENT, BORDER = C.accent, C.border
 
 local HELP = [[
 |cffccb084Recording|r
-Open a vendor's shop and Merchant Map records what they sell and where they stand. Talking to trainers, flight masters and other service NPCs records them too. For NPCs that won't talk to you, target them within 10 yards.
+Vendors and service NPCs come from Classic data. Open a vendor's shop and Merchant Map records their prices, any items the Classic data is missing, and where they stand. Talking to trainers, flight masters and other service NPCs records where they stand too. For NPCs that won't talk to you, target them within 10 yards.
 
 |cffccb084Searching|r
 Open the window with |cffffffff/mm|r or the minimap button, or search straight from chat with |cffffffff/mm hunter trainer|r. Search by name, category or shorthand ("tailoring mats", "lw recipes"), by level ("food 10-20", "45", "over 30") or for services ("hunter trainer", "repair"). Drag items onto categories to sort them, right-click to remove them.
@@ -15,26 +15,66 @@ Open the window with |cffffffff/mm|r or the minimap button, or search straight f
 |cffccb084Finding a vendor|r
 Click an item to target the closest vendor and put a raid marker on them, show them on the minimap and point the arrow at them. Shift-click a map pin for a waypoint, alt-click to hide it. The MM button on the world map picks which pins show.
 
-|cffccb084Verifying|r
-Red pins are Classic data that hasn't been confirmed in Forever. Visit or talk to them to confirm.
-
 |cffccb084Commands|r
-|cffffffff/mm|r  |cffffffff/mm <search>|r  |cffffffff/mm arrow|r  |cffffffff/mm share|r  |cffffffff/mm auto|r  |cffffffff/mm minimap|r]]
+|cffffffff/mm|r  |cffffffff/mm <search>|r  |cffffffff/mm options|r  |cffffffff/mm arrow|r  |cffffffff/mm share|r  |cffffffff/mm auto|r  |cffffffff/mm minimap|r]]
 
-local panel = CreateFrame("Frame")
-panel:Hide()
+-- The page scrolls: everything is laid out on its content frame, panel
+local page = CreateFrame("Frame")
+page:Hide()
+local scroll = CreateFrame("ScrollFrame", nil, page)
+scroll:SetPoint("TOPLEFT")
+scroll:SetPoint("BOTTOMRIGHT", -14, 0)
+local panel = CreateFrame("Frame", nil, scroll)
+panel:SetSize(1, 1)
+scroll:SetScrollChild(panel)
+
+local bar = CreateFrame("Slider", nil, page)
+bar:SetPoint("TOPRIGHT", -4, -4)
+bar:SetPoint("BOTTOMRIGHT", -4, 4)
+bar:SetWidth(6)
+bar:SetOrientation("VERTICAL")
+bar:SetMinMaxValues(0, 0)
+local barTrack = bar:CreateTexture(nil, "BACKGROUND")
+barTrack:SetAllPoints()
+barTrack:SetColorTexture(C.inset[1], C.inset[2], C.inset[3], 1)
+local barThumb = bar:CreateTexture(nil, "ARTWORK")
+barThumb:SetSize(6, 40)
+barThumb:SetColorTexture(BORDER[1], BORDER[2], BORDER[3], 1)
+bar:SetThumbTexture(barThumb)
+bar:SetScript("OnValueChanged", function(_, value) scroll:SetVerticalScroll(value) end)
+scroll:EnableMouseWheel(true)
+scroll:SetScript("OnMouseWheel", function(_, delta) bar:SetValue(bar:GetValue() - delta * 40) end)
 
 local title = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontNormalLarge")
 title:SetPoint("TOPLEFT", 16, -16)
 title:SetText("Merchant Map")
 title:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
 
+-- Layout runs top to bottom from here
+local y = -52
+
+-- Section heading with a thin rule under it
+local function Section(text)
+    y = y - 10
+    local label = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontNormal")
+    label:SetPoint("TOPLEFT", 16, y)
+    label:SetText(text)
+    label:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
+    local rule = panel:CreateTexture(nil, "ARTWORK")
+    rule:SetHeight(1)
+    rule:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -4)
+    rule:SetPoint("RIGHT", panel, "RIGHT", -16, 0)
+    rule:SetColorTexture(BORDER[1], BORDER[2], BORDER[3], 1)
+    y = y - 26
+end
+
 -- Checkbox in the addon's style: bordered square, filled when on
 local checks = {}
-local function Check(text, note, get, set, y)
+local function Check(text, note, get, set)
     local row = CreateFrame("Button", nil, panel)
     row:SetSize(360, 22)
-    row:SetPoint("TOPLEFT", 16, y)
+    row:SetPoint("TOPLEFT", 24, y)
+    y = y - 26
 
     local box = row:CreateTexture(nil, "BORDER")
     box:SetSize(14, 14)
@@ -69,76 +109,6 @@ local function Check(text, note, get, set, y)
     return row
 end
 
-Check("Direction arrow", "Points to the marked vendor",
-    function() return not MM.db.arrowHidden end,
-    function(on) MM:SetArrowShown(on) end, -50)
-
-Check("Lock arrow position", "So it can't be dragged by accident",
-    function() return MM.db.arrowLocked end,
-    function(on) MM.db.arrowLocked = on or nil end, -76)
-
--- Arrow size slider, 50% to 200%
-local sizeLabel = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlight")
-sizeLabel:SetPoint("TOPLEFT", 16, -108)
-sizeLabel:SetText("Arrow size")
-
-local slider = CreateFrame("Slider", nil, panel)
-slider:SetSize(160, 14)
-slider:SetPoint("LEFT", sizeLabel, "RIGHT", 12, 0)
-slider:SetOrientation("HORIZONTAL")
-slider:SetMinMaxValues(0.5, 2)
-slider:SetValueStep(0.1)
-slider:SetObeyStepOnDrag(true)
-slider:EnableMouseWheel(true)
-local track = slider:CreateTexture(nil, "BACKGROUND")
-track:SetPoint("LEFT")
-track:SetPoint("RIGHT")
-track:SetHeight(4)
-track:SetColorTexture(BORDER[1], BORDER[2], BORDER[3], 1)
-local thumb = slider:CreateTexture(nil, "ARTWORK")
-thumb:SetSize(8, 14)
-thumb:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 1)
-slider:SetThumbTexture(thumb)
-
-local sizeValue = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
-sizeValue:SetPoint("LEFT", slider, "RIGHT", 10, 0)
-
--- Preview at the chosen size, off to the right so the largest size doesn't cover other options
-local preview = panel:CreateTexture(nil, "ARTWORK")
-preview:SetPoint("CENTER", panel, "TOPLEFT", 520, -115)
-preview:SetTexture(MM.ARROW_TEXTURE)
-preview:SetVertexColor(0.35, 0.85, 0.35)
-
-slider:SetScript("OnValueChanged", function(_, value)
-    value = math.floor(value * 10 + 0.5) / 10
-    sizeValue:SetText(("%d%%"):format(value * 100))
-    preview:SetSize(56 * value, 56 * value)
-    MM:SetArrowSize(value)
-end)
-slider:SetScript("OnMouseWheel", function(self, delta)
-    self:SetValue(self:GetValue() + delta * 0.1)
-end)
-
-Check("Open the map automatically", "When you click an item or service",
-    function() return not MM.db.noAutoMap end,
-    function(on) MM.db.noAutoMap = not on or nil end, -134)
-
-Check("Minimap button", "Left-click opens Merchant Map",
-    function() return not (MM.db.minimapButton and MM.db.minimapButton.hide) end,
-    function(on) MM:SetMinimapButtonShown(on) end, -160)
-
-Check("Minimap marker", "Shows the vendor you click on the minimap",
-    function() return not MM.db.noMinimapPin end,
-    function(on) MM:SetMinimapPinShown(on) end, -186)
-
-Check("Waypoint", "Sets a map waypoint on the vendor you click",
-    function() return MM.db.autoWaypoint end,
-    function(on) MM.db.autoWaypoint = on or nil end, -212)
-
--- Raid marker dropdown
-local MARKERS = { "Star", "Circle", "Diamond", "Triangle", "Moon", "Square", "Cross", "Skull" }
-local function MarkerIcon(i) return "Interface\\TargetingFrame\\UI-RaidTargetingIcon_" .. i end
-
 local function Box(frame, color)
     local edge = frame:CreateTexture(nil, "BACKGROUND")
     edge:SetAllPoints()
@@ -149,10 +119,40 @@ local function Box(frame, color)
     fill:SetColorTexture(color[1], color[2], color[3], 1)
 end
 
+local function Button(text, width)
+    local b = CreateFrame("Button", nil, panel)
+    b:SetSize(width, 22)
+    Box(b, C.buttonTop)
+    local hl = b:CreateTexture()
+    hl:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.12)
+    b:SetHighlightTexture(hl)
+    b:SetNormalFontObject("MM_GameFontHighlightSmall")
+    b:SetText(text)
+    return b
+end
+
+------------------------------------------------------------------------------------------------
+Section("Clicking an item or vendor")
+
+Check("Open the map", "Shows where they are",
+    function() return not MM.db.noAutoMap end,
+    function(on) MM.db.noAutoMap = not on or nil end)
+
+Check("Minimap marker", "Shows them on the minimap",
+    function() return not MM.db.noMinimapPin end,
+    function(on) MM:SetMinimapPinShown(on) end)
+
+Check("Waypoint", "Sets a map waypoint on them",
+    function() return MM.db.autoWaypoint end,
+    function(on) MM.db.autoWaypoint = on or nil end)
+
 -- Checkbox turns raid markers on or off; the dropdown picks which one
+local MARKERS = { "Star", "Circle", "Diamond", "Triangle", "Moon", "Square", "Cross", "Skull" }
+local function MarkerIcon(i) return "Interface\\TargetingFrame\\UI-RaidTargetingIcon_" .. i end
+
 local markerCheck = Check("Target marker", "",
     function() return not MM.db.noRaidMarker end,
-    function(on) MM:SetRaidMarkerEnabled(on) end, -244)
+    function(on) MM:SetRaidMarkerEnabled(on) end)
 markerCheck:SetWidth(120)
 
 local dropdown = CreateFrame("Button", nil, panel)
@@ -173,7 +173,7 @@ ddArrow:SetText("v")
 
 local markerNote = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
 markerNote:SetPoint("LEFT", dropdown, "RIGHT", 10, 0)
-markerNote:SetText("Put on the vendor you click")
+markerNote:SetText("Targets them and marks them with it")
 
 local function UpdateDropdown()
     local i = MM.db.raidMarker or 8
@@ -181,7 +181,8 @@ local function UpdateDropdown()
     ddText:SetText(MARKERS[i])
 end
 
-local list = CreateFrame("Frame", nil, dropdown)
+-- On the page rather than the scrolling content, so the scroll frame doesn't cut it off
+local list = CreateFrame("Frame", nil, page)
 list:SetSize(130, #MARKERS * 20 + 6)
 list:SetPoint("TOPLEFT", dropdown, "BOTTOMLEFT", 0, -2)
 list:SetFrameStrata("FULLSCREEN_DIALOG")
@@ -223,6 +224,7 @@ list:SetScript("OnEvent", function(self)
     if not self:IsMouseOver() and not dropdown:IsMouseOver() then self:Hide() end
 end)
 dropdown:SetScript("OnClick", function() list:SetShown(not list:IsShown()) end)
+scroll:HookScript("OnVerticalScroll", function() list:Hide() end)
 
 -- Dropdown is dimmed while markers are off
 function markerCheck:OnUpdate(on)
@@ -232,41 +234,109 @@ function markerCheck:OnUpdate(on)
     if not on then list:Hide() end
 end
 
-local share = CreateFrame("Button", nil, panel)
-share:SetSize(170, 22)
-share:SetPoint("TOPLEFT", 16, -276)
-local border = share:CreateTexture(nil, "BACKGROUND")
-border:SetAllPoints()
-border:SetColorTexture(BORDER[1], BORDER[2], BORDER[3], 1)
-local bg = share:CreateTexture(nil, "BORDER")
-bg:SetPoint("TOPLEFT", 1, -1)
-bg:SetPoint("BOTTOMRIGHT", -1, 1)
-bg:SetColorTexture(C.buttonTop[1], C.buttonTop[2], C.buttonTop[3], 1)
-local hl = share:CreateTexture()
-hl:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.12)
-share:SetHighlightTexture(hl)
-share:SetNormalFontObject("MM_GameFontHighlightSmall")
-share:SetText("Share verified data...")
+------------------------------------------------------------------------------------------------
+Section("Direction arrow")
+local arrowTop = y
+
+Check("Show the arrow", "Points to the marked vendor",
+    function() return not MM.db.arrowHidden end,
+    function(on) MM:SetArrowShown(on) end)
+
+Check("Lock position", "So it can't be dragged by accident",
+    function() return MM.db.arrowLocked end,
+    function(on) MM.db.arrowLocked = on or nil end)
+
+-- Size slider, 50% to 200%
+local sizeLabel = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlight")
+sizeLabel:SetPoint("TOPLEFT", 24, y - 4)
+sizeLabel:SetText("Size")
+y = y - 30
+
+local slider = CreateFrame("Slider", nil, panel)
+slider:SetSize(160, 14)
+slider:SetPoint("LEFT", sizeLabel, "RIGHT", 12, 0)
+slider:SetOrientation("HORIZONTAL")
+slider:SetMinMaxValues(0.5, 2)
+slider:SetValueStep(0.1)
+slider:SetObeyStepOnDrag(true)
+slider:EnableMouseWheel(true)
+local track = slider:CreateTexture(nil, "BACKGROUND")
+track:SetPoint("LEFT")
+track:SetPoint("RIGHT")
+track:SetHeight(4)
+track:SetColorTexture(BORDER[1], BORDER[2], BORDER[3], 1)
+local thumb = slider:CreateTexture(nil, "ARTWORK")
+thumb:SetSize(8, 14)
+thumb:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 1)
+slider:SetThumbTexture(thumb)
+
+local sizeValue = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
+sizeValue:SetPoint("LEFT", slider, "RIGHT", 10, 0)
+
+-- Preview at the chosen size, off to the right so the largest size doesn't cover other options
+local preview = panel:CreateTexture(nil, "ARTWORK")
+preview:SetPoint("CENTER", panel, "TOPLEFT", 520, (arrowTop + y) / 2)
+preview:SetTexture(MM.ARROW_TEXTURE)
+preview:SetVertexColor(0.35, 0.85, 0.35)
+
+slider:SetScript("OnValueChanged", function(_, value)
+    value = math.floor(value * 10 + 0.5) / 10
+    sizeValue:SetText(("%d%%"):format(value * 100))
+    preview:SetSize(56 * value, 56 * value)
+    MM:SetArrowSize(value)
+end)
+slider:SetScript("OnMouseWheel", function(self, delta)
+    self:SetValue(self:GetValue() + delta * 0.1)
+end)
+
+------------------------------------------------------------------------------------------------
+Section("Minimap")
+
+Check("Minimap button", "Left-click opens Merchant Map",
+    function() return not (MM.db.minimapButton and MM.db.minimapButton.hide) end,
+    function(on) MM:SetMinimapButtonShown(on) end)
+
+------------------------------------------------------------------------------------------------
+Section("Sharing")
+
+local share = Button("Share recorded data...", 170)
+share:SetPoint("TOPLEFT", 24, y)
 share:SetScript("OnClick", function() MM:ToggleShare() end)
+y = y - 30
 
 local shareNote = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
 shareNote:SetPoint("LEFT", share, "RIGHT", 10, 0)
-shareNote:SetText("Export what you've verified, or import someone else's")
+shareNote:SetText("Export what you've recorded, or import someone else's")
+
+------------------------------------------------------------------------------------------------
+Section("How it works")
 
 local help = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
-help:SetPoint("TOPLEFT", 16, -314)
+help:SetPoint("TOPLEFT", 24, y)
 help:SetPoint("RIGHT", -16, 0)
 help:SetJustifyH("LEFT")
 help:SetSpacing(2)
 help:SetText(HELP)
 
-panel:SetScript("OnShow", function()
+-- Content is as tall as the layout plus the help text, which wraps to the page width
+local function UpdateScroll()
+    panel:SetWidth(scroll:GetWidth())
+    local height = -y + help:GetStringHeight() + 16
+    panel:SetHeight(height)
+    local range = math.max(0, height - scroll:GetHeight())
+    bar:SetMinMaxValues(0, range)
+    bar:SetShown(range > 0)
+end
+scroll:SetScript("OnSizeChanged", UpdateScroll)
+
+page:SetScript("OnShow", function()
+    UpdateScroll()
     for _, row in ipairs(checks) do row:Update() end
     UpdateDropdown()
     slider:SetValue(MM.db.arrowScale or 1)
 end)
 
-local category = Settings.RegisterCanvasLayoutCategory(panel, "Merchant Map")
+local category = Settings.RegisterCanvasLayoutCategory(page, "Merchant Map")
 Settings.RegisterAddOnCategory(category)
 
 function MM:OpenOptions()

@@ -86,11 +86,11 @@ local function ZoneOf(mapID)
     return info and info.mapID
 end
 
--- Takes over the Classic seed for this vendor when the in-game ID differs from the Classic one,
--- matching by name in the same zone. Its offers move to the new key until the scan replaces them.
+-- Takes over the Classic vendor when the in-game ID differs from the Classic one,
+-- matching by name in the same zone. Its offers move to the new key.
 local function AdoptSeed(key, name, zone)
     for seedID, seed in pairs(db.vendors) do
-        if seedID ~= key and seed.unverified and seed.name == name and (not seed.mapID or seed.mapID == zone) then
+        if seedID ~= key and seed.classic and seed.name == name and (not seed.mapID or seed.mapID == zone) then
             db.vendors[seedID] = nil
             for itemID in pairs(seed.items) do
                 local item = db.items[itemID]
@@ -113,7 +113,7 @@ end
 function MM:RemoveSeedFor(key, name, mapID)
     local zone = ZoneOf(mapID)
     for seedID, seed in pairs(db.vendors) do
-        if seedID ~= key and seed.unverified and seed.name == name and (not seed.mapID or seed.mapID == zone) then
+        if seedID ~= key and seed.classic and seed.name == name and (not seed.mapID or seed.mapID == zone) then
             for itemID in pairs(seed.items) do
                 local item = db.items[itemID]
                 if item then
@@ -129,6 +129,14 @@ end
 
 -- Scanning --------------------------------------------------------------
 
+-- Vendors give a discount from Friendly upward; prices are stored without it
+local DISCOUNTS = { [5] = 0.05, [6] = 0.10, [7] = 0.15, [8] = 0.20 }
+
+local function BasePrice(price, discount)
+    if not (price and discount) then return price end
+    return math.floor(price / (1 - discount) + 0.5)
+end
+
 function MM:ScanMerchant()
     scanPending = false
     local key, vendorName = VendorKey()
@@ -136,20 +144,29 @@ function MM:ScanMerchant()
 
     local mapID = C_Map.GetBestMapForUnit("player")
     local pos = mapID and C_Map.GetPlayerMapPosition(mapID, "player")
+    key = MM:VendorSpotKey(key, mapID)
+    local reaction = UnitReaction("npc", "player")
+    local discount = reaction and not (issecretvalue and issecretvalue(reaction)) and DISCOUNTS[reaction]
 
     local vendor = db.vendors[key]
     local seed = AdoptSeed(key, vendorName, ZoneOf(mapID))
-    local wasUnverified = seed or (vendor and vendor.unverified)
     if not vendor then
         vendor = seed or { items = {} }
     elseif seed then
         vendor.seedID = seed.seedID
         for itemID in pairs(seed.items) do vendor.items[itemID] = true end
     end
+    -- Shipped prices for items not seen this time become yours
+    if vendor.shipped then
+        for itemID in pairs(vendor.items) do
+            local offer = db.items[itemID] and db.items[itemID].vendors[key]
+            if offer then offer.shipped = nil end
+        end
+    end
     db.vendors[key] = vendor
     vendor.name = vendorName
     vendor.lastSeen = time()
-    vendor.unverified, vendor.shipped, vendor.located = nil, nil, nil
+    vendor.classic, vendor.shipped, vendor.located = nil, nil, nil
     -- A confirmed position for the Classic vendor isn't needed once you've seen the shop
     db.verifiedServices[key] = nil
     if vendor.seedID then db.verifiedServices[vendor.seedID] = nil end
@@ -169,12 +186,12 @@ function MM:ScanMerchant()
         end
     end
 
-    local seen, complete = {}, true
+    -- Items you can't see (class, race, rank, sold out) are kept: only what you see is updated
+    local complete = true
     for i = 1, GetMerchantNumItems() do
         local itemID = GetMerchantItemID(i)
         local name, icon, price, numAvailable, hasCost = MerchantItem(i)
         if itemID and name then
-            seen[itemID] = true
             local item = db.items[itemID] or { vendors = {} }
             db.items[itemID] = item
             item.name, item.icon = name, icon
@@ -183,11 +200,12 @@ function MM:ScanMerchant()
             local cost, pvp
             if hasCost then cost, pvp = ExtendedCost(i) end
             item.vendors[key] = {
-                price = price,
+                price = BasePrice(price, discount),
                 cost = cost,
                 pvp = pvp or nil,
                 limited = (numAvailable and numAvailable >= 0) or nil,
             }
+            vendor.items[itemID] = true
             MM:QueueAutoCategorize(itemID)
         else
             complete = false
@@ -196,23 +214,8 @@ function MM:ScanMerchant()
 
     if oldFilter then SetMerchantFilter(oldFilter) end
 
-    if complete then
-        -- Drop items this vendor no longer sells
-        for itemID in pairs(vendor.items) do
-            local item = not seen[itemID] and db.items[itemID]
-            if item then
-                item.vendors[key] = nil
-                if not next(item.vendors) then db.items[itemID] = nil end
-            end
-        end
-        vendor.items = seen
-    else
-        for itemID in pairs(seen) do vendor.items[itemID] = true end
-    end
-
     scanIncomplete = not complete
     self:OnDataChanged()
-    if wasUnverified then self:PointToNextUnverified() end
 end
 
 local function QueueScan()
@@ -231,21 +234,9 @@ function MM:MoneyText(copper)
     return C_CurrencyInfo.GetCoinTextureString(copper)
 end
 
-MM.UNVERIFIED = "|cffff5a4dunverified|r"
-
-function MM:OfferVisible(offer)
-    return not (offer.unverified and self.db.hideUnverified)
-end
-
-function MM:ItemVisible(item)
-    for _, offer in pairs(item.vendors) do
-        if self:OfferVisible(offer) then return true end
-    end
-    return false
-end
-
+-- Classic items no one has bought yet have no price
 function MM:PriceText(offer)
-    if offer.unverified then return self.UNVERIFIED end
+    if not (offer.price or offer.cost) then return "|cff8a8a8aNo price data|r" end
     local text = offer.cost
     if offer.price and offer.price > 0 then
         text = text and (self:MoneyText(offer.price) .. " " .. text) or self:MoneyText(offer.price)
@@ -285,6 +276,7 @@ events:SetScript("OnEvent", function(_, event, arg1)
         db.items = db.items or {}
         db.hiddenVendors = db.hiddenVendors or {}
         db.verifiedServices = db.verifiedServices or {}
+        db.holidays = db.holidays or {}
         MM.db = db
         MM:InitCategories()
         events:UnregisterEvent("ADDON_LOADED")

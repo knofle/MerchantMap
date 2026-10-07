@@ -293,23 +293,70 @@ end
 local compactBtn = SquareButton(header, "-", "Compact view: just the search box and the item list.")
 compactBtn:SetPoint("RIGHT", close, "LEFT", -4, 0)
 
--- Shows or hides items and vendors only known from Classic data
-local unverifiedBtn = CreateFrame("Button", nil, header)
-unverifiedBtn:SetSize(112, 18)
-unverifiedBtn:SetPoint("RIGHT", compactBtn, "LEFT", -6, 0)
-SkinButton(unverifiedBtn)
-local unverifiedLabel = unverifiedBtn:CreateFontString(nil, "OVERLAY", "MM_GameFontNormalSmall")
-unverifiedLabel:SetPoint("CENTER")
-unverifiedLabel:SetText("Toggle Unverified")
-SetTooltip(unverifiedBtn, "Show or hide Classic vendor data you haven't confirmed by visiting. It may have changed in Forever.")
-
 local optionsBtn = CreateFrame("Button", nil, header)
 optionsBtn:SetSize(60, 18)
-optionsBtn:SetPoint("RIGHT", unverifiedBtn, "LEFT", -6, 0)
+optionsBtn:SetPoint("RIGHT", compactBtn, "LEFT", -6, 0)
 SkinButton(optionsBtn)
 optionsBtn:SetNormalFontObject("MM_GameFontNormalSmall")
 optionsBtn:SetText("Options")
 optionsBtn:SetScript("OnClick", function() MM:OpenOptions() end)
+
+-- Holidays: a toggle for each holiday's vendors and items, all off by default
+local holidayBtn = CreateFrame("Button", nil, header)
+holidayBtn:SetSize(64, 18)
+holidayBtn:SetPoint("RIGHT", optionsBtn, "LEFT", -6, 0)
+SkinButton(holidayBtn)
+holidayBtn:SetNormalFontObject("MM_GameFontNormalSmall")
+holidayBtn:SetText("Holidays")
+SetTooltip(holidayBtn, "Show vendors and items that are only around during a holiday.")
+
+local holidayList = CreateFrame("Frame", nil, holidayBtn)
+holidayList:SetSize(220, #MM.HOLIDAYS * 20 + 6)
+holidayList:SetPoint("TOPRIGHT", holidayBtn, "BOTTOMRIGHT", 0, -2)
+holidayList:SetFrameStrata("FULLSCREEN_DIALOG")
+holidayList:EnableMouse(true)
+holidayList:Hide()
+Fill(holidayList, C.bg)
+Outline(holidayList, BORDER)
+
+local holidayRows = {}
+for i, holiday in ipairs(MM.HOLIDAYS) do
+    local row = CreateFrame("Button", nil, holidayList)
+    row:SetSize(214, 20)
+    row:SetPoint("TOPLEFT", 3, -3 - (i - 1) * 20)
+    local hl = row:CreateTexture()
+    hl:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.15)
+    row:SetHighlightTexture(hl)
+    local check = CreateFrame("Frame", nil, row)
+    check:SetSize(12, 12)
+    check:SetPoint("LEFT", 4, 0)
+    Fill(check, C.inset)
+    Outline(check, BORDER)
+    local fill = check:CreateTexture(nil, "ARTWORK")
+    fill:SetPoint("TOPLEFT", 3, -3)
+    fill:SetPoint("BOTTOMRIGHT", -3, 3)
+    fill:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 1)
+    local text = row:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
+    text:SetPoint("LEFT", check, "RIGHT", 6, 0)
+    text:SetText(holiday)
+    function row:Update() fill:SetShown(MM:IsHolidayShown(holiday)) end
+    row:SetScript("OnClick", function(self)
+        MM:SetHolidayShown(holiday, not MM:IsHolidayShown(holiday))
+        self:Update()
+    end)
+    holidayRows[i] = row
+end
+
+-- Closes on a click anywhere else
+holidayList:SetScript("OnShow", function(self)
+    for _, row in ipairs(holidayRows) do row:Update() end
+    self:RegisterEvent("GLOBAL_MOUSE_DOWN")
+end)
+holidayList:SetScript("OnHide", function(self) self:UnregisterEvent("GLOBAL_MOUSE_DOWN") end)
+holidayList:SetScript("OnEvent", function(self)
+    if not self:IsMouseOver() and not holidayBtn:IsMouseOver() then self:Hide() end
+end)
+holidayBtn:SetScript("OnClick", function() holidayList:SetShown(not holidayList:IsShown()) end)
 
 local box = EditBox(panel)
 box:SetPoint("TOPLEFT", 10, -30)
@@ -678,14 +725,12 @@ local function BuildGroups()
     wipe(groups)
     wipe(groupSizes)
     for key, npc in pairs(MM.services) do
-        if not (npc.unverified and MM.db.hideUnverified) then
-            for _, path in ipairs(npc.paths) do
-                local group = groups[path] or {}
-                groups[path] = group
-                group[key] = true
-                groupSizes[path] = (groupSizes[path] or 0) + 1
-                groupIcons[path] = groupIcons[path] or npc.icon
-            end
+        for _, path in ipairs(npc.paths) do
+            local group = groups[path] or {}
+            groups[path] = group
+            group[key] = true
+            groupSizes[path] = (groupSizes[path] or 0) + 1
+            groupIcons[path] = groupIcons[path] or npc.icon
         end
     end
 end
@@ -822,35 +867,31 @@ local seen = {}
 local function CountItems()
     local db = MM.db
     wipe(counts)
-    for itemID, item in pairs(db.items) do
-        if MM:ItemVisible(item) then
-            counts[ALL] = (counts[ALL] or 0) + 1
-            local set = db.itemCats[itemID]
-            if set then
-                wipe(seen)
-                for path in pairs(set) do
-                    local p = path
-                    while p and not seen[p] do
-                        seen[p] = true
-                        counts[p] = (counts[p] or 0) + 1
-                        p = MM:ParentPath(p)
-                    end
-                end
-            else
-                counts[UNCAT] = (counts[UNCAT] or 0) + 1
-            end
-        end
-    end
-    for _, npc in pairs(MM.services) do
-        if not (npc.unverified and db.hideUnverified) then
+    for itemID in pairs(db.items) do
+        counts[ALL] = (counts[ALL] or 0) + 1
+        local set = db.itemCats[itemID]
+        if set then
             wipe(seen)
-            for _, path in ipairs(npc.paths) do
+            for path in pairs(set) do
                 local p = path
                 while p and not seen[p] do
                     seen[p] = true
                     counts[p] = (counts[p] or 0) + 1
                     p = MM:ParentPath(p)
                 end
+            end
+        else
+            counts[UNCAT] = (counts[UNCAT] or 0) + 1
+        end
+    end
+    for _, npc in pairs(MM.services) do
+        wipe(seen)
+        for _, path in ipairs(npc.paths) do
+            local p = path
+            while p and not seen[p] do
+                seen[p] = true
+                counts[p] = (counts[p] or 0) + 1
+                p = MM:ParentPath(p)
             end
         end
     end
@@ -911,20 +952,16 @@ local function DrawRows()
             elseif not closest then
                 row.info:SetText("Not on this continent")
             else
-                local zone = MM:ZoneName(closest)
-                row.info:SetText(closest.unverified and ("|cffff5a4d" .. zone .. "|r") or zone)
+                row.info:SetText(MM:ZoneName(closest))
             end
             row.sel:SetShown(itemID == selected)
             row:Show()
         elseif npc then
             row.itemID = itemID
             row.icon:SetTexture(npc.icon or 134400)
-            -- Unverified ones get the same red "?" tag as unverified items
-            local tag = npc.unverified and " |cffff5a4d?|r" or ""
-            row.name:SetText(npc.name .. tag .. (npc.title and (" |cff8a8a8a<" .. npc.title .. ">|r") or ""))
+            row.name:SetText(npc.name .. (npc.title and (" |cff8a8a8a<" .. npc.title .. ">|r") or ""))
             row.name:SetTextColor(0.55, 0.85, 0.9)
-            local zone = MM:ZoneName(npc)
-            row.info:SetText(npc.unverified and ("|cffff5a4d" .. zone .. "|r") or zone)
+            row.info:SetText(MM:ZoneName(npc))
             row.sel:SetShown(itemID == selected)
             row:Show()
         elseif item then
@@ -935,17 +972,9 @@ local function DrawRows()
             row.name:SetText(item.name)
             row.name:SetTextColor(color.r, color.g, color.b)
 
-            local count, onlyKey, verified = 0, nil, false
-            for key, offer in pairs(item.vendors) do
-                if MM:OfferVisible(offer) then
-                    count, onlyKey = count + 1, key
-                    verified = verified or not offer.unverified
-                end
-            end
-            local info = count == 1 and MM:ZoneName(MM.db.vendors[onlyKey] or {}) or (count .. " vendors")
-            -- Items only known from Classic data are tagged red until a vendor confirms them
-            row.info:SetText(verified and info or ("|cffff5a4d" .. info .. "|r"))
-            if not verified then row.name:SetText(item.name .. " |cffff5a4d?|r") end
+            local count, onlyKey = 0, nil
+            for key in pairs(item.vendors) do count, onlyKey = count + 1, key end
+            row.info:SetText(count == 1 and MM:ZoneName(MM.db.vendors[onlyKey] or {}) or (count .. " vendors"))
             row.sel:SetShown(itemID == selected)
             row:Show()
         else
@@ -987,8 +1016,8 @@ function MM:RefreshList()
     placeholder:SetText("Search " .. scope .. "...")
 
     wipe(results)
-    for itemID, item in pairs(db.items) do
-        if self:ItemVisible(item) and self:ItemInCategory(itemID, cat)
+    for itemID in pairs(db.items) do
+        if self:ItemInCategory(itemID, cat)
             and (query == "" or Matches(itemID, tokens))
             and (not low or LevelOK(itemID, low, high)) then
             results[#results + 1] = itemID
@@ -999,7 +1028,7 @@ function MM:RefreshList()
         BuildGroups()
         local paths = {}
         for key, npc in pairs(MM.services) do
-            if not (npc.unverified and db.hideUnverified) and ServiceInCategory(npc, cat)
+            if ServiceInCategory(npc, cat)
                 and (query == "" or ServiceMatches(npc, tokens)) then
                 results[#results + 1] = key
                 for _, path in ipairs(npc.paths) do paths[path] = true end
@@ -1039,12 +1068,10 @@ function MM:RefreshList()
                 local key = ServiceKey(id)
                 if key then self.activeVendors[key] = self.activeVendors[key] or {} end
             else
-                for key, offer in pairs(db.items[id].vendors) do
-                    if self:OfferVisible(offer) then
-                        local ids = self.activeVendors[key] or {}
-                        self.activeVendors[key] = ids
-                        ids[#ids + 1] = id
-                    end
+                for key in pairs(db.items[id].vendors) do
+                    local ids = self.activeVendors[key] or {}
+                    self.activeVendors[key] = ids
+                    ids[#ids + 1] = id
                 end
             end
         end
@@ -1056,11 +1083,6 @@ function MM:RefreshList()
     local vendorCount = 0
     for _ in pairs(self.activeVendors or {}) do vendorCount = vendorCount + 1 end
     status:SetText(("%d items   %d vendors on map"):format(#results, vendorCount))
-    if db.hideUnverified then
-        unverifiedLabel:SetTextColor(0.5, 0.5, 0.5)
-    else
-        unverifiedLabel:SetTextColor(0.85, 0.45, 0.35)
-    end
 
     if not next(db.items) then
         empty:SetText("Open a vendor to start recording.")
@@ -1105,20 +1127,28 @@ function MM:Search(text)
     box:SetText(text)
     MM:RefreshList()
 
-    -- A search for one kind of service goes straight to the nearest one, like clicking its "Nearest" row
-    local nearest
+    -- A search for one kind of service goes straight to the nearest one, like clicking its "Nearest" row.
+    -- A search that finds a single item goes to its nearest vendor, like clicking the item.
+    local nearest, items = nil, {}
     for _, id in ipairs(results) do
         if IsNearest(id) then
             if nearest then return end -- several kinds match, so let the player pick
             nearest = id
+        elseif not IsService(id) then
+            items[#items + 1] = id
         end
     end
     local key = nearest and ServiceKey(nearest)
     if key then
         selected = nearest
         MM:ShowServiceOnMap(key)
-        MM:RefreshList()
+    elseif not nearest and #items == 1 then
+        selected = items[1]
+        MM:ShowItemOnMap(items[1])
+    else
+        return
     end
+    MM:RefreshList()
 end
 
 -- Category tree -----------------------------------------------------------
@@ -1281,10 +1311,10 @@ local function Row_OnEnter(self)
     GameTooltip:AddLine(" ")
     GameTooltip:AddLine("Sold by:", ACCENT[1], ACCENT[2], ACCENT[3])
 
-    local keys, where, unverified = {}, {}, false
-    for key, offer in pairs(item.vendors) do
+    local keys, where = {}, {}
+    for key in pairs(item.vendors) do
         local vendor = MM.db.vendors[key]
-        if vendor and MM:OfferVisible(offer) then
+        if vendor then
             keys[#keys + 1] = key
             where[key] = MM:LocationText(vendor)
         end
@@ -1296,13 +1326,8 @@ local function Row_OnEnter(self)
             break
         end
         local vendor = MM.db.vendors[key]
-        local g = vendor.unverified and 0.35 or 1
         GameTooltip:AddDoubleLine(vendor.name .. " |cff999999" .. where[key] .. "|r",
-            MM:PriceText(item.vendors[key]), 1, g, g, 1, 1, 1)
-        unverified = unverified or vendor.unverified
-    end
-    if unverified then
-        GameTooltip:AddLine("Red vendors are from Classic and may have changed. Visit them to confirm.", 0.6, 0.6, 0.6, true)
+            MM:PriceText(item.vendors[key]), 1, 1, 1, 1, 1, 1)
     end
 
     local set = MM.db.itemCats[self.itemID]
@@ -1517,13 +1542,6 @@ end
 
 -- Panel -------------------------------------------------------------------
 
-unverifiedBtn:SetScript("OnClick", function()
-    MM.db.hideUnverified = not MM.db.hideUnverified or nil
-    selected = nil
-    countsDirty = true
-    MM:RefreshList()
-end)
-
 -- Items whose required level was still loading show up once it arrives
 local levelEvents = CreateFrame("Frame")
 levelEvents:RegisterEvent("GET_ITEM_INFO_RECEIVED")
@@ -1661,16 +1679,8 @@ SlashCmdList.MERCHANTMAP = function(input)
         print(("|cffccb084Merchant Map:|r targeting debug %s."):format(MM.debug and "on" or "off"))
     elseif msg == "minimap" then
         MM:SetMinimapButtonShown(true)
-    elseif msg == "unverified" then
-        MM.verifyMode = not MM.verifyMode or nil
-        MM:RefreshMap()
-        MM:PointToNextUnverified()
-        print(("|cffccb084Merchant Map:|r map shows %s."):format(
-            MM.verifyMode and "only NPCs you still need to talk to" or "your usual pins again"))
-    elseif msg == "next" then
-        MM:PointToNextUnverified()
-    elseif msg == "skip" then
-        MM:SkipUnverified()
+    elseif msg == "options" then
+        MM:OpenOptions()
     elseif msg == "arrow" then
         MM:ToggleArrow()
     elseif msg == "share" then

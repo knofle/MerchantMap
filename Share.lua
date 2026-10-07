@@ -32,13 +32,13 @@ function MM:ExportData()
     -- Only what's newer than the data shipped with the addon
     for key, vendor in pairs(db.vendors) do
         local shipped = self.shippedVendors[key]
-        if not vendor.unverified and not vendor.shipped and vendor.mapID
+        if not vendor.classic and not vendor.shipped and vendor.mapID
             and (not shipped or (vendor.lastSeen or 0) > shipped[5]) then
             local stock = {}
             for itemID in pairs(vendor.items) do
                 local item = db.items[itemID]
                 local offer = item and item.vendors[key]
-                if offer and not offer.unverified and not offer.shipped then
+                if offer and not offer.classic and not offer.shipped then
                     stock[itemID] = { NZ(offer.price), offer.cost, offer.limited, offer.pvp }
                     data.items[itemID] = data.items[itemID] or { item.name, NZ(item.icon) }
                 end
@@ -65,26 +65,18 @@ end
 
 -- Import ----------------------------------------------------------------------
 
--- Replaces a vendor's stock with the imported one, unless yours is as new
+-- Takes an imported vendor's position and prices, unless yours are as new.
+-- Items the import doesn't have keep what you had for them.
 local function ImportVendor(db, key, rec, items)
     local name, mapID, x, y, seen, stock, seedID = unpack(rec, 1, 7)
     x, y, seen = x or 0, y or 0, seen or 0
     local current = db.vendors[key]
-    if current and not current.unverified and (current.lastSeen or 0) >= seen then return false end
+    if current and not current.classic and (current.lastSeen or 0) >= seen then return false end
 
-    -- Drop what we had for this vendor, including Classic and shipped offers
-    if current then
-        for itemID in pairs(current.items) do
-            local item = db.items[itemID]
-            if item then
-                item.vendors[key] = nil
-                if not next(item.vendors) then db.items[itemID] = nil end
-            end
-        end
-    end
-
-    local vendor = { name = name, mapID = mapID, x = x, y = y, lastSeen = seen, items = {} }
-    vendor.seedID = MM:RemoveSeedFor(key, name, mapID) or seedID or (current and current.seedID)
+    local vendor = current or { items = {} }
+    vendor.name, vendor.mapID, vendor.x, vendor.y, vendor.lastSeen = name, mapID, x, y, seen
+    vendor.classic, vendor.shipped, vendor.located = nil, nil, nil
+    vendor.seedID = MM:RemoveSeedFor(key, name, mapID) or seedID or vendor.seedID
     db.vendors[key] = vendor
 
     for itemID, offer in pairs(stock) do

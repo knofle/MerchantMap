@@ -8,7 +8,7 @@ MM.ARROW_TEXTURE = ARROW
 local INTERVAL = 0.05
 local ARRIVED = 5 -- yards
 
-local target, continent, tx, ty, width, height
+local target, label
 
 local frame = CreateFrame("Button", "MerchantMapArrow", UIParent)
 frame:SetSize(56, 56)
@@ -26,23 +26,11 @@ arrow:SetTexture(ARROW)
 local name = frame:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
 name:SetPoint("TOP", frame, "BOTTOM", 0, -2)
 
-local distance = frame:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
-distance:SetPoint("TOP", name, "BOTTOM", 0, -1)
+-- The item you're going to buy, when you clicked one
+local item = frame:CreateFontString(nil, "OVERLAY", "MM_GameFontNormalSmall")
+item:SetPoint("TOP", name, "BOTTOM", 0, -1)
 
-local continents = {}
-local function Continent(mapID)
-    if not mapID then return end
-    local found = continents[mapID]
-    if found == nil then
-        local info = C_Map.GetMapInfo(mapID)
-        while info and info.mapType > Enum.UIMapType.Continent and info.parentMapID and info.parentMapID ~= 0 do
-            info = C_Map.GetMapInfo(info.parentMapID)
-        end
-        found = info and info.mapType == Enum.UIMapType.Continent and info.mapID or false
-        continents[mapID] = found
-    end
-    return found or nil
-end
+local distance = frame:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
 
 -- Green when facing the vendor, turning red as it falls behind you
 local function Tint(angle)
@@ -53,33 +41,23 @@ end
 -- Direction to the vendor (radians from north), refreshed every INTERVAL; nil hides the arrow
 local bearing, lastAngle
 
--- Where the vendor is, and how far: changes slowly, so only every INTERVAL
+-- Where the vendor is, and how far: changes slowly, so only every INTERVAL.
+-- The distance text only changes when the shown value does.
+local shown
+local function SetDistance(value)
+    if value == shown then return end
+    shown = value
+    distance:SetText(type(value) == "number" and value .. " yd" or value)
+end
+
 local function Locate()
     bearing = nil
-    local here = Continent(C_Map.GetBestMapForUnit("player"))
-    if here ~= continent then
-        -- Changed continent: find the vendor on the new one
-        continent, tx = here, nil
-        if here then
-            tx, ty = MM:PosOnMap(target, here)
-            width, height = C_Map.GetMapWorldSize(here)
-        end
-    end
-    local pos = continent and tx and C_Map.GetPlayerMapPosition(continent, "player")
-    if not (pos and width and width > 0) then
-        distance:SetText("Not on this continent")
-        return
-    end
-
-    local px, py = pos:GetXY()
-    local dx, dy = (tx - px) * width, (ty - py) * height
-    local yards = math.sqrt(dx * dx + dy * dy)
-    if yards < ARRIVED then
-        distance:SetText("Arrived")
-        return
-    end
-    distance:SetText(("%d yd"):format(yards))
-    bearing = math.atan2(-dx, -dy)
+    local north, west = MM:VectorTo(target)
+    if not north then return SetDistance("Not on this continent") end
+    local yards = math.floor(math.sqrt(north * north + west * west))
+    if yards < ARRIVED then return SetDistance("Arrived") end
+    SetDistance(yards)
+    bearing = math.atan2(west, north)
 end
 
 -- Turning is read every frame so the arrow follows smoothly; it only redraws when the angle changes
@@ -125,17 +103,9 @@ end
 frame:SetScript("OnDragStart", StartMoving)
 frame:SetScript("OnDragStop", StopMoving)
 
--- Left-click targets and skulls the NPC (through the targeting button). While verifying
--- (/mm unverified), shift-click finds the nearest from where you are and right-click skips one;
--- otherwise right-click clears the marker.
+-- Left-click targets and marks the NPC (through the targeting button), right-click clears the marker
 local function OnClick(_, button)
-    if button == "LeftButton" then
-        if MM.verifyMode and IsShiftKeyDown() then MM:PointToNextUnverified() end
-    elseif MM.verifyMode then
-        MM:SkipUnverified()
-    else
-        MM:ClearMinimapVendor()
-    end
+    if button == "RightButton" then MM:ClearMinimapVendor() end
 end
 frame:SetScript("OnClick", OnClick)
 
@@ -144,12 +114,7 @@ local function ShowTooltip(self)
     GameTooltip:AddLine(target and target.name or "Merchant Map", 1, 1, 1)
     GameTooltip:AddLine("Click to target and mark them (when nearby)", 0.5, 0.5, 0.5)
     if not MM.db.arrowLocked then GameTooltip:AddLine("Drag to move", 0.5, 0.5, 0.5) end
-    if MM.verifyMode then
-        GameTooltip:AddLine("Shift-click to find the nearest from where you are", 0.35, 0.85, 0.35)
-        GameTooltip:AddLine("Right-click to skip to the next one", 0.35, 0.85, 0.35)
-    else
-        GameTooltip:AddLine("Right-click to remove the marker", 0.35, 0.85, 0.35)
-    end
+    GameTooltip:AddLine("Right-click to remove the marker", 0.35, 0.85, 0.35)
     GameTooltip:Show()
 end
 
@@ -175,14 +140,17 @@ frame:SetScript("OnLeave", function(self)
     if not MM:IsTargetOwner(self) then GameTooltip:Hide() end
 end)
 
--- Called by the minimap marker; nil hides the arrow
-function MM:SetArrowTarget(vendor)
-    target, continent, tx = vendor, nil, nil
+-- Called by the minimap marker; nil hides the arrow. itemName is shown under the vendor's name.
+function MM:SetArrowTarget(vendor, itemName)
+    target, label, shown = vendor, itemName, nil
     if vendor and not self.db.arrowHidden then
         name:SetText(vendor.name)
+        item:SetText(itemName or "")
+        distance:ClearAllPoints()
+        distance:SetPoint("TOP", itemName and item or name, "BOTTOM", 0, -1)
         elapsed = INTERVAL
         frame:Show()
-        -- Still under the cursor after skipping: aim the targeting at the new NPC
+        -- Still under the cursor when the target changes: aim the targeting at the new NPC
         if self:IsTargetOwner(frame) then
             AttachTargeting()
             ShowTooltip(frame)
@@ -194,7 +162,7 @@ end
 
 function MM:SetArrowShown(show)
     self.db.arrowHidden = not show or nil
-    self:SetArrowTarget(target)
+    self:SetArrowTarget(target, label)
 end
 
 -- Arrow size as a scale of its normal 56 pixels; the text below it keeps its size

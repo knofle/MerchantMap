@@ -29,6 +29,7 @@ outline:SetVertexColor(0.35, 0.85, 0.35)
 local ring = pin:CreateTexture(nil, "BACKGROUND")
 ring:SetAllPoints()
 ring:SetTexture(CIRCLE)
+ring:SetVertexColor(0.85, 0.68, 0.2)
 local disc = pin:CreateTexture(nil, "BORDER")
 disc:SetSize(13, 13)
 disc:SetPoint("CENTER")
@@ -39,37 +40,10 @@ icon:SetSize(9, 9)
 icon:SetPoint("CENTER")
 icon:SetTexture(COIN)
 
-local continents = {}
-local function Continent(mapID)
-    local found = continents[mapID]
-    if found == nil then
-        local info = C_Map.GetMapInfo(mapID)
-        while info and info.mapType > Enum.UIMapType.Continent and info.parentMapID and info.parentMapID ~= 0 do
-            info = C_Map.GetMapInfo(info.parentMapID)
-        end
-        found = info and info.mapID or false
-        continents[mapID] = found
-    end
-    return found or nil
-end
-
--- The target's spot on a continent and the continent's size only change when either changes
-local cached = {}
-
--- Yards east and south from the player to the vendor, measured on the shared continent map
+-- Yards east and south from the player to the vendor
 local function Offset()
-    local mapID = C_Map.GetBestMapForUnit("player")
-    local continent = mapID and Continent(mapID)
-    if not continent then return end
-    if cached.continent ~= continent then
-        cached.continent = continent
-        cached.vx, cached.vy = MM:PosOnMap(target, continent)
-        cached.width, cached.height = C_Map.GetMapWorldSize(continent)
-    end
-    local player = C_Map.GetPlayerMapPosition(continent, "player")
-    if not (player and cached.vx and cached.width and cached.width > 0) then return end
-    local px, py = player:GetXY()
-    return (cached.vx - px) * cached.width, (cached.vy - py) * cached.height
+    local north, west = MM:VectorTo(target)
+    if north then return -west, -north end
 end
 
 -- Minimap settings, refreshed when they can change rather than every update
@@ -101,14 +75,25 @@ local function ReadSettings()
     square = GetMinimapShape and GetMinimapShape() == "SQUARE"
 end
 
+-- Only touches the pin when where or how it shows changes, as this runs every frame
+local lastX, lastY, lastAlpha
+local function Place(x, y, alpha)
+    if alpha ~= lastAlpha then
+        lastAlpha = alpha
+        pin:SetAlpha(alpha)
+        pin:EnableMouse(alpha > 0)
+    end
+    if x and (x ~= lastX or y ~= lastY) then
+        lastX, lastY = x, y
+        pin:ClearAllPoints()
+        pin:SetPoint("CENTER", Minimap, "CENTER", x, y)
+    end
+end
+
 local function Update()
     local east, south = Offset()
     -- Different continent: keep the target but show nothing
-    pin:EnableMouse(east ~= nil)
-    if not east then
-        pin:SetAlpha(0)
-        return
-    end
+    if not east then return Place(nil, nil, 0) end
 
     local zoom = Minimap:GetZoom()
     local diameter = SIZES[indoors and "indoor" or "outdoor"][zoom + 1] or SIZES.outdoor[1]
@@ -136,9 +121,7 @@ local function Update()
         if outside then x, y = x / dist * radius, y / dist * radius end
     end
 
-    pin:SetAlpha(outside and 0.6 or 1)
-    pin:ClearAllPoints()
-    pin:SetPoint("CENTER", Minimap, "CENTER", x, y)
+    Place(x, y, outside and 0.6 or 1)
 end
 
 -- Every frame, so the pin moves with the minimap instead of trailing it
@@ -197,15 +180,10 @@ pin:SetScript("OnClick", function() MM:ClearMinimapVendor() end)
 function MM:SetMinimapVendor(vendor, key, label)
     if not (vendor and vendor.mapID) then return end
     target, MM.minimapKey = vendor, key
-    wipe(cached)
+    lastX, lastY, lastAlpha = nil, nil, nil
     ReadSettings()
     ReadIndoors(true)
     icon:SetTexture(vendor.icon or COIN)
-    if vendor.unverified then
-        ring:SetVertexColor(0.9, 0.15, 0.1)
-    else
-        ring:SetVertexColor(0.85, 0.68, 0.2)
-    end
     pin:SetShown(not MM.db.noMinimapPin)
     Update()
     -- Option: a map waypoint on the vendor too
@@ -213,7 +191,7 @@ function MM:SetMinimapVendor(vendor, key, label)
         MM:SetWaypoint(vendor, label)
         placedWaypoint = true
     end
-    MM:SetArrowTarget(vendor)
+    MM:SetArrowTarget(vendor, label)
     MM:RefreshMap()
 end
 
