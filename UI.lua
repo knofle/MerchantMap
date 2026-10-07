@@ -1779,8 +1779,15 @@ end
 compactBtn:SetScript("OnClick", function() SetCompact(true) end)
 expandBtn:SetScript("OnClick", function() SetCompact(false) end)
 
+-- Window scale from the options, 75% to 150%
+function MM:SetWindowScale(scale)
+    self.db.windowScale = scale ~= 1 and scale or nil
+    panel:SetScale(scale)
+end
+
 panel:SetScript("OnShow", function()
     local db = MM.db
+    panel:SetScale(db.windowScale or 1)
     ApplyMode()
     ApplySize()
     local p = db.point

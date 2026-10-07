@@ -365,6 +365,42 @@ local UpdateTooltipDropdown = Dropdown("Tooltip position", {
 }, function() return MM.db.tooltipAnchor or "below" end,
    function(value) MM.db.tooltipAnchor = value ~= "below" and value or nil end)
 
+-- Window scale slider, 75% to 150%
+local scaleLabel = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlight")
+scaleLabel:SetPoint("TOPLEFT", 24, y - 4)
+scaleLabel:SetText("Scale")
+y = y - 30
+
+local scaleSlider = CreateFrame("Slider", nil, panel)
+scaleSlider:SetSize(160, 14)
+scaleSlider:SetPoint("LEFT", scaleLabel, "RIGHT", 12, 0)
+scaleSlider:SetOrientation("HORIZONTAL")
+scaleSlider:SetMinMaxValues(0.75, 1.5)
+scaleSlider:SetValueStep(0.05)
+scaleSlider:SetObeyStepOnDrag(true)
+scaleSlider:EnableMouseWheel(true)
+local scaleTrack = scaleSlider:CreateTexture(nil, "BACKGROUND")
+scaleTrack:SetPoint("LEFT")
+scaleTrack:SetPoint("RIGHT")
+scaleTrack:SetHeight(4)
+scaleTrack:SetColorTexture(BORDER[1], BORDER[2], BORDER[3], 1)
+local scaleThumb = scaleSlider:CreateTexture(nil, "ARTWORK")
+scaleThumb:SetSize(8, 14)
+scaleThumb:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 1)
+scaleSlider:SetThumbTexture(scaleThumb)
+
+local scaleValue = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
+scaleValue:SetPoint("LEFT", scaleSlider, "RIGHT", 10, 0)
+
+scaleSlider:SetScript("OnValueChanged", function(_, value)
+    value = math.floor(value * 20 + 0.5) / 20
+    scaleValue:SetText(("%d%%"):format(value * 100 + 0.5))
+    MM:SetWindowScale(value)
+end)
+scaleSlider:SetScript("OnMouseWheel", function(self, delta)
+    self:SetValue(self:GetValue() + delta * 0.05)
+end)
+
 ------------------------------------------------------------------------------------------------
 Section("Minimap")
 
@@ -410,6 +446,7 @@ page:SetScript("OnShow", function()
     for _, row in ipairs(checks) do row:Update() end
     UpdateDropdown()
     UpdateTooltipDropdown()
+    scaleSlider:SetValue(MM.db.windowScale or 1)
     slider:SetValue(MM.db.arrowScale or 1)
 end)
 
