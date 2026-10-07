@@ -291,6 +291,81 @@ slider:SetScript("OnMouseWheel", function(self, delta)
 end)
 
 ------------------------------------------------------------------------------------------------
+Section("Window")
+
+-- Text dropdown: choices are { value, label } pairs
+local function Dropdown(text, choices, get, set)
+    local label = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlight")
+    label:SetPoint("TOPLEFT", 24, y - 4)
+    label:SetText(text)
+    y = y - 30
+
+    local button = CreateFrame("Button", nil, panel)
+    button:SetSize(130, 22)
+    button:SetPoint("LEFT", label, "RIGHT", 12, 0)
+    Box(button, C.buttonTop)
+    local hl = button:CreateTexture()
+    hl:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.12)
+    button:SetHighlightTexture(hl)
+    local current = button:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
+    current:SetPoint("LEFT", 8, 0)
+    local arrow = button:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
+    arrow:SetPoint("RIGHT", -7, 0)
+    arrow:SetText("v")
+
+    local function Update()
+        for _, choice in ipairs(choices) do
+            if choice[1] == get() then current:SetText(choice[2]) end
+        end
+    end
+
+    local menu = CreateFrame("Frame", nil, page)
+    menu:SetSize(130, #choices * 20 + 6)
+    menu:SetPoint("TOPLEFT", button, "BOTTOMLEFT", 0, -2)
+    menu:SetFrameStrata("FULLSCREEN_DIALOG")
+    menu:EnableMouse(true)
+    menu:Hide()
+    Box(menu, C.bg)
+    for i, choice in ipairs(choices) do
+        local row = CreateFrame("Button", nil, menu)
+        row:SetSize(124, 20)
+        row:SetPoint("TOPLEFT", 3, -3 - (i - 1) * 20)
+        local rowHl = row:CreateTexture()
+        rowHl:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.15)
+        row:SetHighlightTexture(rowHl)
+        local rowText = row:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
+        rowText:SetPoint("LEFT", 6, 0)
+        rowText:SetText(choice[2])
+        row:SetScript("OnClick", function()
+            set(choice[1])
+            Update()
+            menu:Hide()
+        end)
+    end
+
+    -- Closes on a click anywhere else, or when the page scrolls
+    menu:SetScript("OnShow", function(self)
+        arrow:SetText("^")
+        self:RegisterEvent("GLOBAL_MOUSE_DOWN")
+    end)
+    menu:SetScript("OnHide", function(self)
+        arrow:SetText("v")
+        self:UnregisterEvent("GLOBAL_MOUSE_DOWN")
+    end)
+    menu:SetScript("OnEvent", function(self)
+        if not self:IsMouseOver() and not button:IsMouseOver() then self:Hide() end
+    end)
+    button:SetScript("OnClick", function() menu:SetShown(not menu:IsShown()) end)
+    scroll:HookScript("OnVerticalScroll", function() menu:Hide() end)
+    return Update
+end
+
+local UpdateTooltipDropdown = Dropdown("Tooltip position", {
+    { "top", "Top" }, { "left", "Left" }, { "right", "Right" }, { "below", "Below" }, { "mouse", "Mouse" },
+}, function() return MM.db.tooltipAnchor or "below" end,
+   function(value) MM.db.tooltipAnchor = value ~= "below" and value or nil end)
+
+------------------------------------------------------------------------------------------------
 Section("Minimap")
 
 Check("Minimap button", "Left-click opens Merchant Map",
@@ -334,6 +409,7 @@ page:SetScript("OnShow", function()
     UpdateScroll()
     for _, row in ipairs(checks) do row:Update() end
     UpdateDropdown()
+    UpdateTooltipDropdown()
     slider:SetValue(MM.db.arrowScale or 1)
 end)
 

@@ -1331,10 +1331,30 @@ end
 
 -- Item rows ---------------------------------------------------------------
 
+-- Where row tooltips go (set in the options): beside the window, or at the cursor.
+-- Below and right-aligned by default, so comparison tooltips don't cover it.
+local TOOLTIP_POINTS = {
+    top = { "BOTTOMRIGHT", "TOPRIGHT", 0, 4 },
+    left = { "TOPRIGHT", "TOPLEFT", -4, 0 },
+    right = { "TOPLEFT", "TOPRIGHT", 4, 0 },
+    below = { "TOPRIGHT", "BOTTOMRIGHT", 0, -4 },
+}
+
+local function TooltipAnchor()
+    return MM.db.tooltipAnchor == "mouse" and "ANCHOR_CURSOR" or "ANCHOR_NONE"
+end
+
+local function PlaceTooltip()
+    if MM.db.tooltipAnchor == "mouse" then return end
+    local p = TOOLTIP_POINTS[MM.db.tooltipAnchor] or TOOLTIP_POINTS.below
+    GameTooltip:ClearAllPoints()
+    GameTooltip:SetPoint(p[1], panel, p[2], p[3], p[4])
+end
+
 local function Row_OnEnter(self)
     if IsGroup(self.itemID) and not IsNearest(self.itemID) then
-        GameTooltip:SetOwner(self, "ANCHOR_NONE")
-        GameTooltip:SetPoint("TOPRIGHT", panel, "BOTTOMRIGHT", 0, -4)
+        GameTooltip:SetOwner(self, TooltipAnchor())
+        PlaceTooltip()
         GameTooltip:AddLine(GroupLabel(self.itemID), ACCENT[1], ACCENT[2], ACCENT[3])
         GameTooltip:AddLine(("%d NPCs"):format(groupSizes[self.itemID:sub(3)] or 0), 0.8, 0.8, 0.8)
         GameTooltip:AddLine("Click to show them all on the map and target the closest", 0.5, 0.5, 0.5)
@@ -1344,16 +1364,14 @@ local function Row_OnEnter(self)
     if IsService(self.itemID) then
         local key = ServiceKey(self.itemID)
         if not key or dragIcon:IsShown() then return end
-        MM:ShowServiceTooltip(self, key, nil, "ANCHOR_NONE")
-        GameTooltip:ClearAllPoints()
-        GameTooltip:SetPoint("TOPRIGHT", panel, "BOTTOMRIGHT", 0, -4)
+        MM:ShowServiceTooltip(self, key, nil, TooltipAnchor())
+        PlaceTooltip()
         return
     end
     local item = MM.db.items[self.itemID]
     if not item or dragIcon:IsShown() then return end
-    -- Below the window, right-aligned, so comparison tooltips don't cover it
-    GameTooltip:SetOwner(self, "ANCHOR_NONE")
-    GameTooltip:SetPoint("TOPRIGHT", panel, "BOTTOMRIGHT", 0, -4)
+    GameTooltip:SetOwner(self, TooltipAnchor())
+    PlaceTooltip()
     GameTooltip:SetItemByID(self.itemID)
     GameTooltip:AddLine(" ")
     GameTooltip:AddLine("Sold by:", ACCENT[1], ACCENT[2], ACCENT[3])
