@@ -1477,7 +1477,31 @@ local function Row_OnClick(self, button)
     MM:RefreshList()
 end
 
+-- Compact view has no categories to drop on, so dragging a row moves the window instead.
+-- It stops on the release itself, like dropping an item does.
+local movingPanel
+local moveWatch = CreateFrame("Frame")
+moveWatch:Hide()
+
+local function StopMovingPanel()
+    if not movingPanel then return end
+    movingPanel = nil
+    moveWatch:Hide()
+    panel:GetScript("OnDragStop")(panel)
+    MM:EndTargetDrag()
+end
+moveWatch:SetScript("OnUpdate", function()
+    if not IsMouseButtonDown("LeftButton") then StopMovingPanel() end
+end)
+
 local function Row_OnDragStart(self)
+    if MM.db.compact then
+        movingPanel = true
+        GameTooltip:Hide()
+        panel:GetScript("OnDragStart")(panel)
+        moveWatch:Show()
+        return
+    end
     if not self.itemID or IsService(self.itemID) then return end
     GameTooltip:Hide()
     local item = MM.db.items[self.itemID]
@@ -1541,7 +1565,11 @@ dragIcon:SetScript("OnUpdate", function(self)
 end)
 
 local function Row_OnDragStop()
-    if dragIcon.itemID then Drop() end
+    if movingPanel then
+        StopMovingPanel()
+    elseif dragIcon.itemID then
+        Drop()
+    end
 end
 
 local function Row_Enter(self)
