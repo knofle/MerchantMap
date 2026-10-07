@@ -159,7 +159,7 @@ end
 ------------------------------------------------------------------------------------------------
 -- When clicking on the left, Minimap on the right
 local clickTop = Columns()
-Section("When clicking an item or vendor")
+Section("When clicking an item or NPC in the list")
 
 Check("Open the map", "",
     function() return not MM.db.noAutoMap end,
