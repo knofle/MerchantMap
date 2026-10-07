@@ -11,6 +11,12 @@ local DEFAULTS = {
     "Professions/Leatherworking/Materials",
 }
 
+-- Top-level categories the addon makes (the defaults above and AutoCategories.lua's)
+local ADDON_ROOTS = {
+    ["Consumables"] = true, ["Class Supplies"] = true, ["Gear"] = true, ["Leveling"] = true, ["Mounts"] = true,
+    ["Pets"] = true, ["Professions"] = true, ["PvP"] = true, ["Quest Items"] = true, ["Reputation"] = true,
+}
+
 local function IsUnder(path, root)
     return path == root or path:sub(1, #root + 1) == root .. "/"
 end
@@ -73,6 +79,37 @@ function MM:InitCategories()
         db.categories = {}
         for _, path in ipairs(DEFAULTS) do self:AddCategory(path) end
     end
+
+    -- Categories you made, which unlike the addon's can be renamed and deleted.
+    -- Before this was tracked, anything outside the addon's own top-level categories counts as yours.
+    if not db.userCategories then
+        db.userCategories = {}
+        for path in pairs(db.categories) do
+            if not ADDON_ROOTS[path:match("^[^/]+")] then db.userCategories[path] = true end
+        end
+    end
+end
+
+-- A category made with the New button, along with any parents it needed
+function MM:AddUserCategory(text)
+    local path = self:NormalizePath(text)
+    if not path then return end
+    local prefix
+    for part in path:gmatch("[^/]+") do
+        prefix = prefix and (prefix .. "/" .. part) or part
+        if not self.db.categories[prefix] then self.db.userCategories[prefix] = true end
+    end
+    return self:AddCategory(path)
+end
+
+-- Yours, and so is everything under it
+function MM:IsUserCategory(path)
+    local user = self.db.userCategories
+    if not user[path] then return false end
+    for other in pairs(self.db.categories) do
+        if IsUnder(other, path) and not user[other] then return false end
+    end
+    return true
 end
 
 function MM:AddCategory(text)
@@ -106,8 +143,10 @@ function MM:RenameCategory(old, text)
     local db = self.db
     Remap(db.categories, old, new)
     Remap(db.collapsed, old, new)
+    Remap(db.userCategories, old, new)
     for _, set in pairs(db.itemCats) do Remap(set, old, new) end
-    self:AddCategory(new)
+    -- New parents it's moved under are yours too
+    self:AddUserCategory(new)
     return new
 end
 
@@ -115,6 +154,7 @@ function MM:DeleteCategory(path)
     local db = self.db
     Remap(db.categories, path)
     Remap(db.collapsed, path)
+    Remap(db.userCategories, path)
     for itemID, set in pairs(db.itemCats) do
         Remap(set, path)
         if not next(set) then db.itemCats[itemID] = nil end

@@ -407,8 +407,8 @@ renameBtn:SetPoint("LEFT", newBtn, "RIGHT", 6, 0)
 local deleteBtn = TextButton(panel, "Delete", 56)
 deleteBtn:SetPoint("LEFT", renameBtn, "RIGHT", 6, 0)
 SetTooltip(newBtn, "New subcategory under the selected one. Use / for nesting, e.g. Base/Consumables/Ammo")
-SetTooltip(renameBtn, "Rename or move the selected category. Items and subcategories follow.")
-SetTooltip(deleteBtn, "Shift-click to delete the selected category and its subcategories.")
+SetTooltip(renameBtn, "Rename or move a category you made. Items and subcategories follow.")
+SetTooltip(deleteBtn, "Shift-click to delete a category you made, with its subcategories.")
 
 local editor = EditBox(panel)
 editor:SetPoint("TOPLEFT", tree, "BOTTOMLEFT", 0, -6)
@@ -436,23 +436,21 @@ local expandBtn = SquareButton(panel, "+", "Full view: categories, status and hi
 expandBtn:SetPoint("RIGHT", miniClose, "LEFT", -3, 0)
 expandBtn:Hide()
 
+-- The item being dragged follows the cursor, with its name and where it will go
 local dragIcon = CreateFrame("Frame", nil, UIParent)
-dragIcon:SetSize(20, 20)
+dragIcon:SetSize(30, 30)
 dragIcon:SetFrameStrata("TOOLTIP")
 dragIcon:Hide()
+Fill(dragIcon, C.bg)
+Outline(dragIcon, ACCENT)
 dragIcon.tex = dragIcon:CreateTexture(nil, "ARTWORK")
-dragIcon.tex:SetAllPoints()
-dragIcon:SetScript("OnUpdate", function(self)
-    -- Safety net: if the drag ended without us hearing about it, drop the icon
-    if not IsMouseButtonDown("LeftButton") then
-        self:Hide()
-        return
-    end
-    local x, y = GetCursorPosition()
-    local scale = UIParent:GetEffectiveScale()
-    self:ClearAllPoints()
-    self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale + 14, y / scale - 14)
-end)
+dragIcon.tex:SetPoint("TOPLEFT", 2, -2)
+dragIcon.tex:SetPoint("BOTTOMRIGHT", -2, 2)
+dragIcon.tex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+dragIcon.name = dragIcon:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlight")
+dragIcon.name:SetPoint("BOTTOMLEFT", dragIcon, "RIGHT", 6, 1)
+dragIcon.hint = dragIcon:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
+dragIcon.hint:SetPoint("TOPLEFT", dragIcon, "RIGHT", 6, -1)
 
 local treeRows, rows = {}, {}
 
@@ -934,7 +932,8 @@ local function DrawTree()
         end
     end
     UpdateScrollbar(tree, treeOffset, #nodes, TREE_ROWS)
-    local editable = MM:IsCategory(category) and not IsVirtual(category)
+    -- Only categories you made can be renamed or deleted
+    local editable = MM:IsCategory(category) and not IsVirtual(category) and MM:IsUserCategory(category)
     renameBtn:SetEnabled(editable)
     deleteBtn:SetEnabled(editable)
 end
@@ -1204,6 +1203,13 @@ local function CreateTreeRow(i)
     row.sel:SetAllPoints()
     row.sel:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.2)
 
+    -- Shown while an item is dragged over the row
+    row.drop = CreateFrame("Frame", nil, row)
+    row.drop:SetAllPoints()
+    row.drop:Hide()
+    Fill(row.drop, ACCENT, 0.25)
+    Outline(row.drop, ACCENT)
+
     row.toggle = CreateFrame("Button", nil, row)
     row.toggle:SetSize(16, ROW_H)
     row.toggle:SetNormalFontObject("MM_GameFontDisableLarge")
@@ -1269,7 +1275,7 @@ editor:SetScript("OnEnterPressed", function(self)
     local text = self:GetText()
     local path
     if editMode == "new" then
-        path = MM:AddCategory(text)
+        path = MM:AddUserCategory(text)
     elseif editMode == "rename" then
         path = MM:RenameCategory(category, text)
     end
@@ -1443,22 +1449,64 @@ end
 local function Row_OnDragStart(self)
     if not self.itemID or IsService(self.itemID) then return end
     GameTooltip:Hide()
+    local item = MM.db.items[self.itemID]
+    local color = ITEM_QUALITY_COLORS[item.quality or 1] or ITEM_QUALITY_COLORS[1]
     dragIcon.itemID = self.itemID
-    dragIcon.tex:SetTexture(MM.db.items[self.itemID].icon or 134400)
+    dragIcon.tex:SetTexture(item.icon or 134400)
+    dragIcon.name:SetText(item.name)
+    dragIcon.name:SetTextColor(color.r, color.g, color.b)
     dragIcon:Show()
 end
 
-local function Row_OnDragStop()
-    dragIcon:Hide()
-    if not dragIcon.itemID then return end
+-- The category row under the cursor that the item can go in
+local function DropTarget()
     for _, node in ipairs(treeRows) do
         if node:IsVisible() and node.path and MM:IsCategory(node.path) and not IsVirtual(node.path)
             and node:IsMouseOver() then
-            MM:AssignItem(dragIcon.itemID, node.path)
-            countsDirty = true
-            MM:RefreshList()
-            break
+            return node
         end
+    end
+end
+
+local dropRow
+local function SetDropRow(row)
+    if row == dropRow then return end
+    if dropRow then dropRow.drop:Hide() end
+    dropRow = row
+    if row then
+        row.drop:Show()
+        dragIcon.hint:SetText("Add to " .. row.path:match("[^/]+$"))
+    else
+        dragIcon.hint:SetText("Drop on a category")
+    end
+end
+
+dragIcon:SetScript("OnShow", function() dragIcon.hint:SetText("Drop on a category") end)
+dragIcon:SetScript("OnHide", function()
+    if dropRow then dropRow.drop:Hide() end
+    dropRow = nil
+end)
+dragIcon:SetScript("OnUpdate", function(self)
+    -- Safety net: if the drag ended without us hearing about it, drop the icon
+    if not IsMouseButtonDown("LeftButton") then
+        self:Hide()
+        return
+    end
+    local x, y = GetCursorPosition()
+    local scale = UIParent:GetEffectiveScale()
+    self:ClearAllPoints()
+    self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / scale + 20, y / scale - 20)
+    SetDropRow(DropTarget())
+end)
+
+local function Row_OnDragStop()
+    local target = DropTarget()
+    dragIcon:Hide()
+    if not dragIcon.itemID then return end
+    if target then
+        MM:AssignItem(dragIcon.itemID, target.path)
+        countsDirty = true
+        MM:RefreshList()
     end
     dragIcon.itemID = nil
 end
