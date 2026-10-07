@@ -515,6 +515,29 @@ local function Seed()
             end
         end
     end
+    MM:RefreshItemHolidays()
+end
+
+-- Which shown holidays each item belongs to, for the Holidays category in the window
+function MM:RefreshItemHolidays()
+    local db, byItem = self.db, {}
+    local function Add(itemID, holiday)
+        byItem[itemID] = byItem[itemID] or {}
+        byItem[itemID][holiday] = true
+    end
+    for key, vendor in pairs(db.vendors) do
+        local holiday = KeyHoliday(key) or KeyHoliday(vendor.seedID)
+        if holiday then
+            for itemID in pairs(vendor.items) do
+                local item = db.items[itemID]
+                if item and item.vendors[key] then Add(itemID, holiday) end
+            end
+        end
+    end
+    for itemID, holiday in pairs(self.holidayItems) do
+        if db.items[itemID] then Add(itemID, holiday) end
+    end
+    self.itemHolidays = byItem
 end
 
 -- Holidays in the data, in calendar order

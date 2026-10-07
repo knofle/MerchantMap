@@ -596,6 +596,17 @@ local function GearWords(itemID)
     return words
 end
 
+local EMPTY = {}
+
+-- Every word in the item's name, gear words or this category path
+local function PathMatches(name, gear, path, tokens)
+    local lower = LowerPath(path)
+    for _, t in ipairs(tokens) do
+        if not (TokenIn(name, t) or TokenIn(gear, t) or TokenIn(lower, t)) then return false end
+    end
+    return true
+end
+
 -- Every word must match the item's name or gear words, or those plus one of its category paths
 local function Matches(itemID, tokens)
     local name, gear = LowerName(itemID), GearWords(itemID)
@@ -608,17 +619,11 @@ local function Matches(itemID, tokens)
     end
     if not missing then return true end
 
-    local set = MM.db.itemCats[itemID]
-    if not set then return false end
-    for path in pairs(set) do
-        local lower, ok = LowerPath(path), true
-        for _, t in ipairs(tokens) do
-            if not (TokenIn(name, t) or TokenIn(gear, t) or TokenIn(lower, t)) then
-                ok = false
-                break
-            end
-        end
-        if ok then return true end
+    for path in pairs(MM.db.itemCats[itemID] or EMPTY) do
+        if PathMatches(name, gear, path, tokens) then return true end
+    end
+    for holiday in pairs(MM:ItemHolidayPaths(itemID) or EMPTY) do
+        if PathMatches(name, gear, "Holidays/" .. holiday, tokens) then return true end
     end
     return false
 end
@@ -642,8 +647,9 @@ local function IsService(id)
     return type(id) == "string"
 end
 
+-- Services and Holidays are built from the data, not edited
 local function IsVirtual(path)
-    return path == "Services" or path:sub(1, 9) == "Services/"
+    return path == "Services" or path:sub(1, 9) == "Services/" or MM:IsHolidayPath(path)
 end
 
 local servicePaths
@@ -774,6 +780,9 @@ end
 -- Categories without one use their parent's; class trainers use the class icon.
 local ICONS = "Interface\\Icons\\"
 local CATEGORY_ICONS = {
+    ["Holidays"] = 17303, ["Feast of Winter Veil"] = 17202, ["Hallow's End"] = 20557,
+    ["Lunar Festival"] = 21747, ["Love is in the Air"] = 21815, ["Children's Week"] = 23161,
+    ["Darkmoon Faire (Elwynn Forest)"] = 19302, ["Darkmoon Faire (Mulgore)"] = 19302,
     ["Consumables"] = 118, ["Food & Drink"] = 4540, ["Food"] = 117, ["Mana"] = 159, ["Buff Food"] = 2680,
     ["Ammo"] = 2512, ["Arrows"] = 2512, ["Bullets"] = 2516, ["Potions"] = 118, ["Elixirs"] = 5997,
     ["Flasks"] = 13510, ["Scrolls"] = 955, ["Bandages"] = 1251, ["Explosives"] = 4358,
@@ -842,6 +851,7 @@ local function BuildTree()
     local all, hasKids = {}, {}
     for path in pairs(db.categories) do all[path] = true end
     for path in pairs(ServicePaths()) do all[path] = true end
+    for path in pairs(MM:HolidayPaths()) do all[path] = true end
     for path in pairs(all) do
         local parent = MM:ParentPath(path)
         if parent then hasKids[parent] = true end
@@ -867,22 +877,21 @@ local seen = {}
 local function CountItems()
     local db = MM.db
     wipe(counts)
+    local function Count(path)
+        local p = path
+        while p and not seen[p] do
+            seen[p] = true
+            counts[p] = (counts[p] or 0) + 1
+            p = MM:ParentPath(p)
+        end
+    end
     for itemID in pairs(db.items) do
         counts[ALL] = (counts[ALL] or 0) + 1
-        local set = db.itemCats[itemID]
-        if set then
-            wipe(seen)
-            for path in pairs(set) do
-                local p = path
-                while p and not seen[p] do
-                    seen[p] = true
-                    counts[p] = (counts[p] or 0) + 1
-                    p = MM:ParentPath(p)
-                end
-            end
-        else
-            counts[UNCAT] = (counts[UNCAT] or 0) + 1
-        end
+        local set, holidays = db.itemCats[itemID], MM:ItemHolidayPaths(itemID)
+        wipe(seen)
+        for path in pairs(set or {}) do Count(path) end
+        for holiday in pairs(holidays or {}) do Count("Holidays/" .. holiday) end
+        if not (set or holidays) then counts[UNCAT] = (counts[UNCAT] or 0) + 1 end
     end
     for _, npc in pairs(MM.services) do
         wipe(seen)
@@ -999,7 +1008,8 @@ function MM:RefreshList()
     local query, low, high = ParseQuery(strlower(strtrim(box:GetText())))
     local tokens = Tokens(query)
 
-    if category ~= ALL and category ~= UNCAT and not db.categories[category] and not ServicePaths()[category] then
+    if category ~= ALL and category ~= UNCAT and not db.categories[category] and not ServicePaths()[category]
+        and not MM:HolidayPaths()[category] then
         category = ALL
     end
     if treeDirty then
@@ -1408,7 +1418,7 @@ local function Row_OnClick(self, button)
     end
 
     if button == "RightButton" then
-        if MM:IsCategory(ActiveCategory()) then
+        if MM:IsCategory(ActiveCategory()) and not IsVirtual(ActiveCategory()) then
             ShowRemoveButton(itemID)
             return
         end
@@ -1584,7 +1594,7 @@ local foldedThisSession
 local function FoldAll()
     local collapsed = MM.db.collapsed
     wipe(collapsed)
-    for _, set in ipairs({ MM.db.categories, ServicePaths() }) do
+    for _, set in ipairs({ MM.db.categories, ServicePaths(), MM:HolidayPaths() }) do
         for path in pairs(set) do
             local parent = MM:ParentPath(path)
             if parent then collapsed[parent] = true end

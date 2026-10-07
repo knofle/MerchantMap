@@ -135,10 +135,36 @@ function MM:UnassignItem(itemID, root)
     if not next(set) then self.db.itemCats[itemID] = nil end
 end
 
+-- Holidays/<holiday> for the holidays turned on that an item belongs to (set by Seed.lua)
+local HOLIDAYS = "Holidays"
+
+function MM:IsHolidayPath(path)
+    return path == HOLIDAYS or path:sub(1, #HOLIDAYS + 1) == HOLIDAYS .. "/"
+end
+
+function MM:HolidayPaths()
+    local paths = {}
+    for _, holidays in pairs(self.itemHolidays or {}) do
+        for holiday in pairs(holidays) do
+            paths[HOLIDAYS] = true
+            paths[HOLIDAYS .. "/" .. holiday] = true
+        end
+    end
+    return paths
+end
+
+function MM:ItemHolidayPaths(itemID)
+    return self.itemHolidays and self.itemHolidays[itemID]
+end
+
 function MM:ItemInCategory(itemID, root)
     local set = self.db.itemCats[itemID]
+    local holidays = self:ItemHolidayPaths(itemID)
     if root == self.ALL then return true end
-    if root == self.UNCAT then return not set end
+    if root == self.UNCAT then return not set and not holidays end
+    if self:IsHolidayPath(root) then
+        return holidays ~= nil and (root == HOLIDAYS or holidays[root:sub(#HOLIDAYS + 2)] == true)
+    end
     if not set then return false end
     for path in pairs(set) do
         if IsUnder(path, root) then return true end

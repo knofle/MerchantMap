@@ -215,6 +215,7 @@ function MM:ScanMerchant()
     if oldFilter then SetMerchantFilter(oldFilter) end
 
     scanIncomplete = not complete
+    self:RefreshItemHolidays()
     self:OnDataChanged()
 end
 
