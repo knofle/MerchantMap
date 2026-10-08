@@ -156,6 +156,115 @@ local function EndColumns(top, leftBottom)
     y, x, colWidth = bottom, 16, nil
 end
 
+-- Slider in the addon's style, its value shown as a percentage
+local function Slider(text, min, max, step, onChange)
+    local label = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlight")
+    label:SetPoint("TOPLEFT", x + 8, y - 4)
+    label:SetText(text)
+    y = y - 30
+
+    local slider = CreateFrame("Slider", nil, panel)
+    slider:SetSize(120, 14)
+    slider:SetPoint("LEFT", label, "RIGHT", 12, 0)
+    slider:SetOrientation("HORIZONTAL")
+    slider:SetMinMaxValues(min, max)
+    slider:SetValueStep(step)
+    slider:SetObeyStepOnDrag(true)
+    slider:EnableMouseWheel(true)
+    local track = slider:CreateTexture(nil, "BACKGROUND")
+    track:SetPoint("LEFT")
+    track:SetPoint("RIGHT")
+    track:SetHeight(4)
+    track:SetColorTexture(BORDER[1], BORDER[2], BORDER[3], 1)
+    local thumb = slider:CreateTexture(nil, "ARTWORK")
+    thumb:SetSize(8, 14)
+    thumb:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 1)
+    slider:SetThumbTexture(thumb)
+
+    local shown = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
+    shown:SetPoint("LEFT", slider, "RIGHT", 10, 0)
+    slider:SetScript("OnValueChanged", function(_, value)
+        value = math.floor(value / step + 0.5) * step
+        shown:SetText(("%d%%"):format(value * 100 + 0.5))
+        onChange(value)
+    end)
+    slider:SetScript("OnMouseWheel", function(self, delta)
+        self:SetValue(self:GetValue() + delta * step)
+    end)
+    return slider
+end
+
+-- Text dropdown: choices are { value, label } pairs. With a text it gets its own labelled row;
+-- with a frame instead it sits to the right of that, on the same row.
+local function Dropdown(text, choices, get, set)
+    local label = text
+    if type(text) == "string" then
+        label = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlight")
+        label:SetPoint("TOPLEFT", x + 8, y - 4)
+        label:SetText(text)
+        y = y - 30
+    end
+
+    local button = CreateFrame("Button", nil, panel)
+    button:SetSize(130, 22)
+    button:SetPoint("LEFT", label, "RIGHT", 12, 0)
+    Box(button, C.buttonTop)
+    local hl = button:CreateTexture()
+    hl:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.12)
+    button:SetHighlightTexture(hl)
+    local current = button:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
+    current:SetPoint("LEFT", 8, 0)
+    local arrow = button:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
+    arrow:SetPoint("RIGHT", -7, 0)
+    arrow:SetText("v")
+
+    local function Update()
+        for _, choice in ipairs(choices) do
+            if choice[1] == get() then current:SetText(choice[2]) end
+        end
+    end
+
+    local menu = CreateFrame("Frame", nil, page)
+    menu:SetSize(130, #choices * 20 + 6)
+    menu:SetPoint("TOPLEFT", button, "BOTTOMLEFT", 0, -2)
+    menu:SetFrameStrata("FULLSCREEN_DIALOG")
+    menu:EnableMouse(true)
+    menu:Hide()
+    Box(menu, C.bg)
+    for i, choice in ipairs(choices) do
+        local row = CreateFrame("Button", nil, menu)
+        row:SetSize(124, 20)
+        row:SetPoint("TOPLEFT", 3, -3 - (i - 1) * 20)
+        local rowHl = row:CreateTexture()
+        rowHl:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.15)
+        row:SetHighlightTexture(rowHl)
+        local rowText = row:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
+        rowText:SetPoint("LEFT", 6, 0)
+        rowText:SetText(choice[2])
+        row:SetScript("OnClick", function()
+            set(choice[1])
+            Update()
+            menu:Hide()
+        end)
+    end
+
+    -- Closes on a click anywhere else, or when the page scrolls
+    menu:SetScript("OnShow", function(self)
+        arrow:SetText("^")
+        self:RegisterEvent("GLOBAL_MOUSE_DOWN")
+    end)
+    menu:SetScript("OnHide", function(self)
+        arrow:SetText("v")
+        self:UnregisterEvent("GLOBAL_MOUSE_DOWN")
+    end)
+    menu:SetScript("OnEvent", function(self)
+        if not self:IsMouseOver() and not button:IsMouseOver() then self:Hide() end
+    end)
+    button:SetScript("OnClick", function() menu:SetShown(not menu:IsShown()) end)
+    scroll:HookScript("OnVerticalScroll", function() menu:Hide() end)
+    return Update
+end
+
 ------------------------------------------------------------------------------------------------
 -- When clicking on the left, Minimap on the right
 local clickTop = Columns()
@@ -259,118 +368,24 @@ function markerCheck:OnUpdate(on)
 end
 
 local clickBottom = NextColumn(clickTop)
-Section("Minimap")
+Section("Buttons")
 
-Check("Minimap button", "Left-click opens Merchant Map",
+Check("Minimap button", "Opens Merchant Map",
     function() return not (MM.db.minimapButton and MM.db.minimapButton.hide) end,
     function(on) MM:SetMinimapButtonShown(on) end)
 
+local mapButtonCheck = Check("World map button", "",
+    function() return not MM.db.noMapButton end,
+    function(on) MM:SetMapButtonShown(on) end)
+mapButtonCheck:SetWidth(140)
+
+local UpdateMapButtonDropdown = Dropdown(mapButtonCheck.label, {
+    { "TOPLEFT", "Top left" }, { "TOPRIGHT", "Top right" },
+    { "BOTTOMLEFT", "Bottom left" }, { "BOTTOMRIGHT", "Bottom right" },
+}, function() return MM.db.mapButtonCorner or "TOPRIGHT" end,
+   function(value) MM:SetMapButtonCorner(value) end)
+
 EndColumns(clickTop, clickBottom)
-
--- Slider in the addon's style, its value shown as a percentage
-local function Slider(text, min, max, step, onChange)
-    local label = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlight")
-    label:SetPoint("TOPLEFT", x + 8, y - 4)
-    label:SetText(text)
-    y = y - 30
-
-    local slider = CreateFrame("Slider", nil, panel)
-    slider:SetSize(120, 14)
-    slider:SetPoint("LEFT", label, "RIGHT", 12, 0)
-    slider:SetOrientation("HORIZONTAL")
-    slider:SetMinMaxValues(min, max)
-    slider:SetValueStep(step)
-    slider:SetObeyStepOnDrag(true)
-    slider:EnableMouseWheel(true)
-    local track = slider:CreateTexture(nil, "BACKGROUND")
-    track:SetPoint("LEFT")
-    track:SetPoint("RIGHT")
-    track:SetHeight(4)
-    track:SetColorTexture(BORDER[1], BORDER[2], BORDER[3], 1)
-    local thumb = slider:CreateTexture(nil, "ARTWORK")
-    thumb:SetSize(8, 14)
-    thumb:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 1)
-    slider:SetThumbTexture(thumb)
-
-    local shown = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
-    shown:SetPoint("LEFT", slider, "RIGHT", 10, 0)
-    slider:SetScript("OnValueChanged", function(_, value)
-        value = math.floor(value / step + 0.5) * step
-        shown:SetText(("%d%%"):format(value * 100 + 0.5))
-        onChange(value)
-    end)
-    slider:SetScript("OnMouseWheel", function(self, delta)
-        self:SetValue(self:GetValue() + delta * step)
-    end)
-    return slider
-end
-
--- Text dropdown: choices are { value, label } pairs
-local function Dropdown(text, choices, get, set)
-    local label = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlight")
-    label:SetPoint("TOPLEFT", x + 8, y - 4)
-    label:SetText(text)
-    y = y - 30
-
-    local button = CreateFrame("Button", nil, panel)
-    button:SetSize(130, 22)
-    button:SetPoint("LEFT", label, "RIGHT", 12, 0)
-    Box(button, C.buttonTop)
-    local hl = button:CreateTexture()
-    hl:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.12)
-    button:SetHighlightTexture(hl)
-    local current = button:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
-    current:SetPoint("LEFT", 8, 0)
-    local arrow = button:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
-    arrow:SetPoint("RIGHT", -7, 0)
-    arrow:SetText("v")
-
-    local function Update()
-        for _, choice in ipairs(choices) do
-            if choice[1] == get() then current:SetText(choice[2]) end
-        end
-    end
-
-    local menu = CreateFrame("Frame", nil, page)
-    menu:SetSize(130, #choices * 20 + 6)
-    menu:SetPoint("TOPLEFT", button, "BOTTOMLEFT", 0, -2)
-    menu:SetFrameStrata("FULLSCREEN_DIALOG")
-    menu:EnableMouse(true)
-    menu:Hide()
-    Box(menu, C.bg)
-    for i, choice in ipairs(choices) do
-        local row = CreateFrame("Button", nil, menu)
-        row:SetSize(124, 20)
-        row:SetPoint("TOPLEFT", 3, -3 - (i - 1) * 20)
-        local rowHl = row:CreateTexture()
-        rowHl:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.15)
-        row:SetHighlightTexture(rowHl)
-        local rowText = row:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
-        rowText:SetPoint("LEFT", 6, 0)
-        rowText:SetText(choice[2])
-        row:SetScript("OnClick", function()
-            set(choice[1])
-            Update()
-            menu:Hide()
-        end)
-    end
-
-    -- Closes on a click anywhere else, or when the page scrolls
-    menu:SetScript("OnShow", function(self)
-        arrow:SetText("^")
-        self:RegisterEvent("GLOBAL_MOUSE_DOWN")
-    end)
-    menu:SetScript("OnHide", function(self)
-        arrow:SetText("v")
-        self:UnregisterEvent("GLOBAL_MOUSE_DOWN")
-    end)
-    menu:SetScript("OnEvent", function(self)
-        if not self:IsMouseOver() and not button:IsMouseOver() then self:Hide() end
-    end)
-    button:SetScript("OnClick", function() menu:SetShown(not menu:IsShown()) end)
-    scroll:HookScript("OnVerticalScroll", function() menu:Hide() end)
-    return Update
-end
 
 ------------------------------------------------------------------------------------------------
 -- Window on the left, Direction arrow on the right
@@ -446,6 +461,7 @@ page:SetScript("OnShow", function()
     for _, row in ipairs(checks) do row:Update() end
     UpdateDropdown()
     UpdateTooltipDropdown()
+    UpdateMapButtonDropdown()
     scaleSlider:SetValue(MM.db.windowScale or 1)
     slider:SetValue(MM.db.arrowScale or 1)
 end)

@@ -935,13 +935,46 @@ local function MenuLine(menu, y)
     return y - 7
 end
 
+local mapButton, mapMenu
+
+-- Option: the MM button on the world map can be turned off
+function MM:SetMapButtonShown(show)
+    self.db.noMapButton = not show or nil
+    if mapButton then mapButton:SetShown(show) end
+end
+
+-- Option: which corner of the map it sits in, 40 from the top or bottom edge and 4 from the side.
+-- Its menu opens toward the middle of the map.
+local function PlaceMapButton()
+    if not mapButton then return end
+    local corner = MM.db and MM.db.mapButtonCorner or "TOPRIGHT"
+    local top, left = corner:find("^TOP") ~= nil, corner:find("LEFT$") ~= nil
+    local side = left and "LEFT" or "RIGHT"
+    local container = WorldMapFrame.ScrollContainer or WorldMapFrame
+    mapButton:ClearAllPoints()
+    mapButton:SetPoint(corner, container, corner, left and 4 or -4, top and -40 or 40)
+    mapMenu:ClearAllPoints()
+    if top then
+        mapMenu:SetPoint("TOP" .. side, mapButton, "BOTTOM" .. side, 0, -3)
+    else
+        mapMenu:SetPoint("BOTTOM" .. side, mapButton, "TOP" .. side, 0, 3)
+    end
+end
+
+function MM:SetMapButtonCorner(corner)
+    self.db.mapButtonCorner = corner ~= "TOPRIGHT" and corner or nil
+    PlaceMapButton()
+end
+
 local function CreateMapMenu()
     local container = WorldMapFrame.ScrollContainer or WorldMapFrame
 
     -- Top right corner of the map
     local button = CreateFrame("Button", nil, WorldMapFrame)
-    button:SetSize(52, 22)
-    button:SetPoint("TOPRIGHT", container, "TOPRIGHT", -4, -40)
+    mapButton = button
+    -- The map can load before saved settings do; login applies the option then
+    button:SetShown(not (MM.db and MM.db.noMapButton))
+    button:SetSize(42, 22)
     button:SetFrameLevel(container:GetFrameLevel() + 20)
     SolidBox(button, 0.9)
     local hl = button:CreateTexture()
@@ -955,14 +988,12 @@ local function CreateMapMenu()
     label:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
     label:SetPoint("LEFT", icon, "RIGHT", 5, 0)
     label:SetText("MM")
-    local arrow = button:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
-    arrow:SetPoint("RIGHT", -7, 0)
-    arrow:SetText("v")
 
     local menu = CreateFrame("Frame", nil, button)
     menu:SetFrameStrata("FULLSCREEN_DIALOG")
     menu:SetWidth(MENU_W)
-    menu:SetPoint("TOPRIGHT", button, "BOTTOMRIGHT", 0, -3)
+    mapMenu = menu
+    PlaceMapButton()
     menu:EnableMouse(true)
     menu:Hide()
     SolidBox(menu, 0.95)
@@ -980,11 +1011,9 @@ local function CreateMapMenu()
         for _, row in ipairs(rows) do
             if row.Update then row:Update() end
         end
-        arrow:SetText("^")
         self:RegisterEvent("GLOBAL_MOUSE_DOWN")
     end)
     menu:SetScript("OnHide", function(self)
-        arrow:SetText("v")
         self:UnregisterEvent("GLOBAL_MOUSE_DOWN")
     end)
     menu:SetScript("OnEvent", function(self)
@@ -1004,6 +1033,13 @@ if WorldMapFrame then
 else
     EventUtil.ContinueOnAddOnLoaded("Blizzard_WorldMap", Attach)
 end
+
+local loginEvents = CreateFrame("Frame")
+loginEvents:RegisterEvent("PLAYER_LOGIN")
+loginEvents:SetScript("OnEvent", function()
+    if mapButton then mapButton:SetShown(not MM.db.noMapButton) end
+    PlaceMapButton()
+end)
 
 -- API used by the UI ------------------------------------------------------------
 
