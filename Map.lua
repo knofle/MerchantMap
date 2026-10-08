@@ -1079,14 +1079,14 @@ function MM:ShowVendorTooltip(owner, key, stacked)
     local matched = self.pinned and self.pinned[key]
     if not (vendor and matched) then return end
 
-    -- Full stock, with the items you searched for or selected listed first and marked,
-    -- and the ones not in stock at the last visit together at the bottom
+    -- Full stock, with the items you searched for or selected listed first and marked (even when not in
+    -- stock at the last visit, which they then say in red), and the other not-in-stock ones at the bottom
     local itemIDs, isMatch = VendorItems(key, vendor), {}
     if matched ~= true then
         for _, itemID in ipairs(matched) do isMatch[itemID] = true end
         local first, rest, late = {}, {}, {}
         for _, itemID in ipairs(itemIDs) do
-            local list = self.db.items[itemID].vendors[key].notSeen and late or isMatch[itemID] and first or rest
+            local list = isMatch[itemID] and first or self.db.items[itemID].vendors[key].notSeen and late or rest
             list[#list + 1] = itemID
         end
         for _, itemID in ipairs(rest) do first[#first + 1] = itemID end
@@ -1111,7 +1111,9 @@ function MM:ShowVendorTooltip(owner, key, stacked)
         local color = ITEM_QUALITY_COLORS[item.quality or 1] or ITEM_QUALITY_COLORS[1]
         local marker = isMatch[itemID] and "|cff8fd18f>|r " or ""
         local text = marker .. "|T" .. (item.icon or 134400) .. ":0|t " .. (item.name or "?")
-        if offer.notSeen then
+        if offer.notSeen and isMatch[itemID] then
+            GameTooltip:AddDoubleLine(text, "|cffff4d4dNot in stock at last visit|r", color.r, color.g, color.b)
+        elseif offer.notSeen then
             if not lateShown then
                 lateShown = true
                 GameTooltip:AddLine(" ")
