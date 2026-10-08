@@ -260,7 +260,10 @@ local function ConfirmNPC(unit, event, kind)
         npc.mapID, npc.x, npc.y, npc.located = mapID, x, y, now
     end
 
-    if changed then MM:OnDataChanged() end
+    if changed then
+        MM:OnDataChanged()
+        MM:PointToNextUnvisited()
+    end
 end
 
 local confirmEvents = CreateFrame("Frame")

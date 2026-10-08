@@ -150,6 +150,7 @@ function MM:ScanMerchant()
 
     local vendor = db.vendors[key]
     local seed = AdoptSeed(key, vendorName, ZoneOf(mapID))
+    local wasClassic = seed or (vendor and vendor.classic)
     if not vendor then
         vendor = seed or { items = {} }
     elseif seed then
@@ -217,6 +218,7 @@ function MM:ScanMerchant()
     scanIncomplete = not complete
     self:RefreshItemHolidays()
     self:OnDataChanged()
+    if wasClassic then self:PointToNextUnvisited() end
 end
 
 local function QueueScan()

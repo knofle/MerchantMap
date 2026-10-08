@@ -1823,6 +1823,13 @@ SlashCmdList.MERCHANTMAP = function(input)
         print(("|cffccb084Merchant Map:|r targeting debug %s."):format(MM.debug and "on" or "off"))
     elseif msg == "minimap" then
         MM:SetMinimapButtonShown(true)
+    elseif msg == "unverified" then
+        -- Not in the help: the map shows only NPCs you haven't visited, and marks the nearest
+        MM.verifyMode = not MM.verifyMode or nil
+        MM:RefreshMap()
+        MM:PointToNextUnvisited()
+        print(("|cffccb084Merchant Map:|r map shows %s."):format(
+            MM.verifyMode and "only NPCs you haven't visited" or "your usual pins again"))
     elseif msg == "options" then
         MM:OpenOptions()
     elseif msg == "arrow" then

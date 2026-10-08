@@ -746,9 +746,29 @@ local function PinState(key, vendor)
 end
 
 -- Search results or all vendors (Vendors), plus hidden ones (Show hidden)
+-- /mm unverified (left out of the help): only the NPCs you haven't visited or talked to yet
+local function UnvisitedNPCs()
+    local db, pinned = MM.db, {}
+    for key, vendor in pairs(db.vendors) do
+        if vendor.classic and not vendor.located then pinned[key] = true end
+    end
+    for key, npc in pairs(MM.services) do
+        if not npc.verifiedAt then pinned[key] = true end
+    end
+    for key in pairs(pinned) do
+        if db.hiddenVendors[key] and not db.showHidden then pinned[key] = nil end
+    end
+    return pinned
+end
+
 local function PinnedVendors()
     local db = MM.db
     local pinned = {}
+    if MM.verifyMode then
+        pinned = UnvisitedNPCs()
+        if MM.minimapKey and MM:GetNPC(MM.minimapKey) then pinned[MM.minimapKey] = true end
+        return pinned
+    end
     for key, ids in pairs(MM.activeVendors or {}) do pinned[key] = ids end
     for key, vendor in pairs(db.vendors) do
         local state = PinState(key, vendor)
@@ -1193,6 +1213,17 @@ end
 -- Closest of a set of service NPC keys
 function MM:ClosestServiceKey(keys)
     return ClosestNPC(keys)
+end
+
+-- In /mm unverified, marks the nearest NPC you haven't visited yet
+function MM:PointToNextUnvisited()
+    if not self.verifyMode then return end
+    local key = ClosestNPC(UnvisitedNPCs())
+    if key then
+        self:SetMinimapVendor(self:GetNPC(key), key)
+    else
+        print("|cffccb084Merchant Map:|r no unvisited NPCs left on this continent.")
+    end
 end
 
 -- Opens your zone if a vendor there sells the item, otherwise the smallest map showing all its vendors.
