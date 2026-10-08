@@ -1200,12 +1200,24 @@ function MM:OnDataChanged()
     end)
 end
 
+-- Merchant Map is locked during combat: its windows close and won't open until it ends
+local function InCombat()
+    if not InCombatLockdown() then return false end
+    print("|cffccb084Merchant Map:|r not available in combat.")
+    return true
+end
+
 function MM:Toggle()
-    panel:SetShown(not panel:IsShown())
+    if panel:IsShown() then
+        panel:Hide()
+    elseif not InCombat() then
+        panel:Show()
+    end
 end
 
 -- /mm <words>: opens the window searching all items and services for them
 function MM:Search(text)
+    if InCombat() then return end
     panel:Show()
     if category ~= ALL then
         category, offset = ALL, 0
@@ -1884,6 +1896,7 @@ panel:SetScript("OnHide", function()
     MM:RefreshMap()
 end)
 
+do
 -- Vendor stock window: everything one vendor sells, opened by shift-clicking them on the map ----
 
 local STOCK_ROWS, STOCK_W = 18, 320
@@ -2011,7 +2024,7 @@ end
 
 function MM:ShowVendorStock(key)
     local vendor = self.db.vendors[key]
-    if not vendor then return end
+    if not vendor or InCombat() then return end
     stockKey, stockItems, stockOffset = key, self:VendorItems(key), 0
     -- Those not in stock at the last visit are sorted last, under their own heading
     local count = #stockItems
@@ -2035,7 +2048,9 @@ stock:SetScript("OnShow", function()
     DrawStock()
 end)
 tinsert(scaledFrames, stock)
+end
 
+do
 -- Search tips window ----------------------------------------------------------
 
 local function Tip(text) return "|cffffffff" .. text .. "|r" end
@@ -2051,20 +2066,20 @@ local TIPS = table.concat({
     "",
     "|cffccb084Levels|r",
     Tip("20-30") .. ", " .. Tip("45") .. ", " .. Tip("over 30") .. " or " .. Tip("under 30") .. ", with or without words: "
-        .. Tip("food 10-20") .. ". For recipes it's the skill they need: " .. Tip("lw recipe 150-165") .. ".",
+        .. Tip("food 10-20") .. ". For recipes it's the skill they need.",
     "",
     "|cffccb084Only what you can use|r",
-    "Add " .. Tip("usable") .. " to hide anything with red text in its tooltip: " .. Tip("usable mail armor 20-30") .. ".",
+    "Add " .. Tip("usable") .. " to hide anything with red text in its tooltip: " .. Tip("usable mail 20-30") .. ".",
     "",
     "|cffccb084Trainers and other NPCs|r",
     Tip("hunter trainer") .. ", " .. Tip("repair") .. ", " .. Tip("flight master") .. ", " .. Tip("mailbox") .. "...",
     "Nearest goes to the closest one, All shows every one on the map.",
     "",
     "|cffccb084Categories and holidays|r",
-    "Click a category to search inside it. Holiday items show once that holiday is turned on from the dropdown up top.",
+    "Click a category to search inside it. Holiday items show once that holiday is turned on.",
     "",
     "|cffccb084From chat|r",
-    Tip("/mm hunter trainer") .. ". A single match goes straight to the nearest one. (Note, this will not apply a target marker to the vendor)",
+    Tip("/mm hunter trainer") .. ". A single match goes straight to the nearest one.",
     "",
     "|cffccb084Once you've found it|r",
     "Click it to mark the nearest vendor that has it, and target them when close enough. "
@@ -2154,6 +2169,15 @@ tipsScroll:SetScript("OnSizeChanged", LayoutTips)
 
 function MM:ToggleSearchTips()
     tips:SetShown(not tips:IsShown())
+end
+
+local combatEvents = CreateFrame("Frame")
+combatEvents:RegisterEvent("PLAYER_REGEN_DISABLED")
+combatEvents:SetScript("OnEvent", function()
+    panel:Hide()
+    MerchantMapStockFrame:Hide()
+    tips:Hide()
+end)
 end
 
 SLASH_MERCHANTMAP1 = "/mm"

@@ -818,9 +818,11 @@ function Provider:OnMapChanged()
     MapCanvasDataProviderMixin.OnMapChanged(self)
 end
 
+-- No pins in combat: adding them touches protected map functions, which the game blocks then
 function Provider:RefreshAllData()
     SetHovered(nil)
     self:RemoveAllData()
+    if InCombatLockdown() then return end
     local map = self:GetMap()
     local mapID = map:GetMapID()
 
@@ -1034,6 +1036,12 @@ else
     EventUtil.ContinueOnAddOnLoaded("Blizzard_WorldMap", Attach)
 end
 
+-- Pins come off the map when combat starts and back when it ends
+local combatEvents = CreateFrame("Frame")
+combatEvents:RegisterEvent("PLAYER_REGEN_DISABLED")
+combatEvents:RegisterEvent("PLAYER_REGEN_ENABLED")
+combatEvents:SetScript("OnEvent", function() MM:RefreshMap() end)
+
 local loginEvents = CreateFrame("Frame")
 loginEvents:RegisterEvent("PLAYER_LOGIN")
 loginEvents:SetScript("OnEvent", function()
@@ -1179,6 +1187,7 @@ local function PlaceWaypoint(mapID, x, y, name)
 end
 
 function MM:ClearWaypoint()
+    if InCombatLockdown() then return end
     self.waypointVendor = nil
     local wui = WaypointUIAPI and WaypointUIAPI.Navigation
     if wui and wui.ClearUserNavigation and pcall(wui.ClearUserNavigation) then return end
@@ -1187,6 +1196,7 @@ end
 
 -- name is what the waypoint is called where that's supported, like the item you're buying
 function MM:SetWaypoint(vendor, name)
+    if InCombatLockdown() then return end
     if not (vendor and vendor.mapID and C_Map.CanSetUserWaypointOnMap) then return end
 
     -- Micro maps often reject waypoints, so climb until one accepts
