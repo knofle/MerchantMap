@@ -142,7 +142,7 @@ pin:SetScript("OnEnter", function(self)
     ShowTooltip(self)
     MM:AttachTargetButton(self, {
         rightClick = true,
-        unmarkName = target.name,
+        unmarkName = MM:TargetName(target),
         onEnter = ShowTooltip,
         onLeave = GameTooltip_Hide,
         onClick = function(_, button)

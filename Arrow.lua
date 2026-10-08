@@ -112,7 +112,9 @@ frame:SetScript("OnClick", OnClick)
 local function ShowTooltip(self)
     GameTooltip:SetOwner(self, "ANCHOR_TOP")
     GameTooltip:AddLine(target and target.name or "Merchant Map", 1, 1, 1)
-    GameTooltip:AddLine("Click to target and mark them (when nearby)", 0.5, 0.5, 0.5)
+    if not (target and target.object) then
+        GameTooltip:AddLine("Click to target and mark them (when nearby)", 0.5, 0.5, 0.5)
+    end
     if not MM.db.arrowLocked then GameTooltip:AddLine("Drag to move", 0.5, 0.5, 0.5) end
     GameTooltip:AddLine("Right-click to remove the marker", 0.35, 0.85, 0.35)
     GameTooltip:Show()
@@ -121,8 +123,8 @@ end
 local function AttachTargeting()
     if not target then return end
     MM:AttachTargetButton(frame, {
-        name = target.name,
-        unmarkName = target.name,
+        name = MM:TargetName(target) or false,
+        unmarkName = MM:TargetName(target),
         rightClick = true,
         onEnter = ShowTooltip,
         onLeave = GameTooltip_Hide,

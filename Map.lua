@@ -416,13 +416,18 @@ local function HideTargetButton()
 end
 
 -- opts: name (defaults to the owner's vendor), rightClick, onEnter, onLeave, onClick, onDragStart, onDragStop
+-- Name the targeting macro uses; mailboxes and other objects can't be targeted
+function MM:TargetName(npc)
+    return npc and not npc.object and npc.name or nil
+end
+
 local function AttachTargetButton(owner, opts)
     -- A list refresh mid-drag would re-aim the button and lose the drop
     if InCombatLockdown() or (targetButton and targetButton.dragging) then return end
     opts = opts or {}
     local b = TargetButton()
     b.owner, b.opts, b.dragging = owner, opts, nil
-    local name = opts.name or (owner.vendor and owner.vendor.name)
+    local name = opts.name or MM:TargetName(owner.vendor)
     b.targetName = name or nil
     b.unmarkName = opts.unmarkName
     AimButton(b)
@@ -620,7 +625,7 @@ local function AttachPinTargeting(pin)
     if pin.stacked == 1 and not WaypointWanted(pin) then
         AttachTargetButton(pin, {
             rightClick = true,
-            unmarkName = pin.key == MM.minimapKey and pin.vendor.name or nil,
+            unmarkName = pin.key == MM.minimapKey and MM:TargetName(pin.vendor) or nil,
         })
     else
         HideTargetButton()
@@ -1012,7 +1017,7 @@ function MM:ShowServiceTooltip(owner, key, stacked, anchor)
     GameTooltip:AddLine(" ")
     if stacked and stacked > 1 then
         GameTooltip:AddLine(("Click to pick between %d overlapping vendors"):format(stacked), 1, 0.82, 0)
-    else
+    elseif not npc.object then
         GameTooltip:AddLine("Click to target and mark them (when nearby)", 0.5, 0.5, 0.5)
     end
     GameTooltip:AddLine("Shift-click to set waypoint", 0.5, 0.5, 0.5)

@@ -639,6 +639,7 @@ local SERVICE_WORDS = {
     ["Services/Guild Masters"] = "guild tabard charter",
     ["Services/Stable Masters"] = "stable pet",
     ["Services/Transmogrifiers"] = "transmog tmog xmog",
+    ["Services/Mailboxes"] = "mail post",
 }
 
 local function IsService(id)
@@ -1615,7 +1616,7 @@ function Row_Hover(self)
         vendor = key and MM.db.vendors[key]
     end
     MM:AttachTargetButton(self, {
-        name = vendor and vendor.name or false,
+        name = MM:TargetName(vendor) or false,
         rightClick = true,
         onEnter = Row_Enter,
         onLeave = Row_Leave,

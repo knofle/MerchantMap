@@ -36,6 +36,7 @@ local SERVICE_ICONS = {
     ["Guild Masters"] = "Interface\\Minimap\\Tracking\\Banker",
     ["Repair"] = "Interface\\Minimap\\Tracking\\Repair",
     ["Transmogrifiers"] = "Interface\\Minimap\\Tracking\\Transmogrifier",
+    ["Mailboxes"] = "Interface\\Minimap\\Tracking\\Mailbox",
 }
 
 local function ServiceIcon(path)
@@ -93,6 +94,19 @@ function MM:RefreshServices()
                 npc.mapID, npc.x, npc.y = AreaMap(v[4]), v[5] / 100, v[6] / 100
             end
             if npc.mapID then self.services[key] = npc end
+        end
+    end
+
+    -- Mailboxes: objects, so they can't be targeted or confirmed by talking to them.
+    -- Keyed by where they stand, which stays the same when the data is rebuilt.
+    local mailPaths = { "Services/Mailboxes" }
+    for _, box in ipairs(self.knownMailboxes or {}) do
+        local mapID = box[1]:find(faction, 1, true) and AreaMap(box[2])
+        if mapID then
+            self.services["m" .. box[2] .. ":" .. box[3] .. ":" .. box[4]] = {
+                name = "Mailbox", paths = mailPaths, icon = ServiceIcon(mailPaths[1]), service = true, object = true,
+                mapID = mapID, x = box[3] / 100, y = box[4] / 100, verifiedAt = 0,
+            }
         end
     end
 
