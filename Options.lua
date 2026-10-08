@@ -10,7 +10,7 @@ local HELP = [[
 Vendors and service NPCs come from Classic data. Open a vendor's shop and Merchant Map records their prices, any items the Classic data is missing, and where they stand. Talking to trainers, flight masters and other service NPCs records where they stand too. For NPCs that won't talk to you, target them within 10 yards.
 
 |cffccb084Searching|r
-Open the window with |cffffffff/mm|r or the minimap button, or search straight from chat with |cffffffff/mm hunter trainer|r. Search by name, category or shorthand ("tailoring mats", "lw recipes"), by level ("food 10-20", "45", "over 30") or for services ("hunter trainer", "repair"). Drag items onto categories to sort them, right-click to remove them.
+Open the window with |cffffffff/mm|r or the minimap button, or search straight from chat with |cffffffff/mm hunter trainer|r. Search by name, category or shorthand ("tailoring mats", "lw recipes"), by level ("food 10-20", "45", "over 30"), add "usable" for only what you can use ("usable gear 20-30"), or search for services ("hunter trainer", "repair"). Drag items onto categories to sort them, right-click to remove them.
 
 |cffccb084Finding a vendor|r
 Click an item to target the closest vendor and put a raid marker on them, show them on the minimap and point the arrow at them. Shift-click a vendor on the map for their full inventory, alt-click a pin to hide it. The MM button on the world map picks which pins show.

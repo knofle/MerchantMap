@@ -496,8 +496,9 @@ end
 
 -- A level range like "1-15", "over 30", "under 30" (or a single level like "45") in the search keeps items whose
 -- required level, or profession skill for recipes, is inside it; items with no requirement are left out
+-- Returns the words left to match, the level range, and whether "usable" was asked for
 local function ParseQuery(query)
-    local low, high
+    local low, high, usable
     local rest = query:gsub("(%d+)%s*%-%s*(%d+)", function(a, b)
         low, high = tonumber(a), tonumber(b)
         return " "
@@ -520,11 +521,13 @@ local function ParseQuery(query)
         local level = not low and word:match("^%d+$") and tonumber(word)
         if level then
             low, high = level, level
+        elseif word == "usable" then
+            usable = true
         else
             words[#words + 1] = word
         end
     end
-    return table.concat(words, " "), low, high
+    return table.concat(words, " "), low, high, usable
 end
 
 -- Required levels come from the item cache; uncached items are requested and fill in later.
@@ -559,6 +562,41 @@ local function RequiredLevel(itemID)
     end
     return level
 end
+
+-- "usable": no red text in the item's tooltip (level, armor type, class, reputation, skill, already known).
+-- Uncached items are requested and fill in later, like levels. Cleared when any of that can change.
+local usableCache = {}
+
+local function IsRed(color)
+    return color and color.r > 0.99 and color.g < 0.2 and color.b < 0.2
+end
+
+local function Usable(itemID)
+    local known = usableCache[itemID]
+    if known ~= nil then return known end
+    if not C_Item.IsItemDataCachedByID(itemID) then
+        pendingLevels[itemID] = true
+        C_Item.RequestLoadItemDataByID(itemID)
+        return false
+    end
+    local data = C_TooltipInfo and C_TooltipInfo.GetItemByID(itemID)
+    if not (data and data.lines) then return false end
+    known = true
+    for _, line in ipairs(data.lines) do
+        if (line.leftText and IsRed(line.leftColor)) or (line.rightText and IsRed(line.rightColor)) then
+            known = false
+            break
+        end
+    end
+    usableCache[itemID] = known
+    return known
+end
+
+local usableEvents = CreateFrame("Frame")
+for _, event in ipairs({ "PLAYER_LEVEL_UP", "SKILL_LINES_CHANGED", "UPDATE_FACTION", "LEARNED_SPELL_IN_TAB", "NEW_RECIPE_LEARNED" }) do
+    pcall(usableEvents.RegisterEvent, usableEvents, event)
+end
+usableEvents:SetScript("OnEvent", function() wipe(usableCache) end)
 
 local function LevelOK(itemID, low, high)
     local level = RequiredLevel(itemID)
@@ -1034,7 +1072,7 @@ function MM:RefreshList()
     end
     if not panel:IsShown() then return end
     local db = self.db
-    local query, low, high = ParseQuery(strlower(strtrim(box:GetText())))
+    local query, low, high, usable = ParseQuery(strlower(strtrim(box:GetText())))
     local tokens = Tokens(query)
 
     if category ~= ALL and category ~= UNCAT and not db.categories[category] and not ServicePaths()[category]
@@ -1058,7 +1096,8 @@ function MM:RefreshList()
     for itemID in pairs(db.items) do
         if self:ItemInCategory(itemID, cat)
             and (query == "" or Matches(itemID, tokens))
-            and (not low or LevelOK(itemID, low, high)) then
+            and (not low or LevelOK(itemID, low, high))
+            and (not usable or Usable(itemID)) then
             results[#results + 1] = itemID
         end
     end
@@ -1093,7 +1132,7 @@ function MM:RefreshList()
     end)
 
     -- Pin the selected item, or everything shown when searching or browsing a category
-    local source = selected and { selected } or ((query ~= "" or low or cat ~= ALL) and results) or nil
+    local source = selected and { selected } or ((query ~= "" or low or usable or cat ~= ALL) and results) or nil
     if source then
         self.activeVendors = {}
         for _, id in ipairs(source) do
