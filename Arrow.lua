@@ -5,6 +5,11 @@ local _, MM = ...
 
 local ARROW = "Interface\\AddOns\\MerchantMap\\arrow"
 MM.ARROW_TEXTURE = ARROW
+-- Shown instead of the arrow when there's no direction to point in
+local STATUS_ICONS = {
+    arrived = { "Interface\\AddOns\\MerchantMap\\arrived", 0.35, 0.85, 0.35 },
+    elsewhere = { "Interface\\AddOns\\MerchantMap\\elsewhere", 0.7, 0.7, 0.7 },
+}
 local INTERVAL = 0.05
 local ARRIVED = 5 -- yards
 
@@ -50,12 +55,21 @@ local function SetDistance(value)
     distance:SetText(type(value) == "number" and value .. " yd" or value)
 end
 
+-- "arrived" or "elsewhere" (another continent) while there's nothing to point at
+local status, shownStatus
+
 local function Locate()
-    bearing = nil
+    bearing, status = nil, nil
     local north, west = MM:VectorTo(target)
-    if not north then return SetDistance("Not on this continent") end
+    if not north then
+        status = "elsewhere"
+        return SetDistance("Not on this continent")
+    end
     local yards = math.floor(math.sqrt(north * north + west * west))
-    if yards < ARRIVED then return SetDistance("Arrived") end
+    if yards < ARRIVED then
+        status = "arrived"
+        return SetDistance("Arrived")
+    end
     SetDistance(yards)
     bearing = math.atan2(west, north)
 end
@@ -67,6 +81,23 @@ local function Update(_, dt)
     if elapsed >= INTERVAL then
         elapsed = 0
         Locate()
+    end
+
+    -- Arrived or on another continent: a still icon instead of the arrow
+    if status then
+        if status ~= shownStatus then
+            shownStatus = status
+            local icon = STATUS_ICONS[status]
+            arrow:SetTexture(icon[1])
+            arrow:SetRotation(0)
+            arrow:SetVertexColor(icon[2], icon[3], icon[4])
+            lastAngle = nil
+        end
+        arrow:Show()
+        return
+    elseif shownStatus then
+        shownStatus = nil
+        arrow:SetTexture(ARROW)
     end
 
     local facing = bearing and GetPlayerFacing()
