@@ -13,7 +13,7 @@ Vendors and service NPCs come from Classic data. Open a vendor's shop and Mercha
 Open the window with |cffffffff/mm|r or the minimap button, or search straight from chat with |cffffffff/mm hunter trainer|r. Search by name, category or shorthand ("tailoring mats", "lw recipes"), by level ("food 10-20", "45", "over 30") or for services ("hunter trainer", "repair"). Drag items onto categories to sort them, right-click to remove them.
 
 |cffccb084Finding a vendor|r
-Click an item to target the closest vendor and put a raid marker on them, show them on the minimap and point the arrow at them. Ctrl-click a map pin for a waypoint, shift-click a vendor to see everything they sell, alt-click to hide it. The MM button on the world map picks which pins show.
+Click an item to target the closest vendor and put a raid marker on them, show them on the minimap and point the arrow at them. Shift-click a vendor on the map for their full inventory, alt-click a pin to hide it. The MM button on the world map picks which pins show.
 
 |cffccb084Commands|r
 |cffffffff/mm|r  |cffffffff/mm <search>|r  |cffffffff/mm options|r  |cffffffff/mm arrow|r  |cffffffff/mm share|r  |cffffffff/mm auto|r  |cffffffff/mm minimap|r]]

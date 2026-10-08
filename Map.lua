@@ -118,8 +118,7 @@ local function StyleRow(row)
     row.name:SetTextColor(unpack(NAME_COLORS[row.state]))
 end
 
--- Ctrl-click sets a waypoint, shift-click opens a vendor's full stock, alt-click hides or enables them.
--- Returns true if handled.
+-- Shift-click opens a vendor's full stock, alt-click hides or enables them. Returns true if handled.
 local function PinAction(frame)
     if IsAltKeyDown() then
         local hide = frame.state ~= "hidden"
@@ -131,10 +130,6 @@ local function PinAction(frame)
             StyleRow(frame)
         end
         MM:RefreshMap()
-        return true
-    elseif IsControlKeyDown() then
-        MM:SetWaypoint(frame.vendor)
-        if spread then spread:Hide() end
         return true
     elseif IsShiftKeyDown() then
         if not frame.vendor.service then
@@ -495,7 +490,7 @@ local function SpreadRow(i)
         hl:Show()
         accent:Show()
         HighlightPin(row.key, true)
-        MM:ShowVendorTooltip(row, row.key)
+        MM:ShowVendorTooltip(row, row.key, 1)
     end
     local function Leave()
         hl:Hide()
@@ -1027,17 +1022,11 @@ function MM:ShowServiceTooltip(owner, key, stacked, anchor)
     for _, path in ipairs(npc.paths) do
         GameTooltip:AddLine((path:gsub("^Services/", ""):gsub("/", " > ")), 1, 1, 1)
     end
-    GameTooltip:AddLine(" ")
-    if stacked and stacked > 1 then
-        GameTooltip:AddLine(("Click to pick between %d overlapping vendors"):format(stacked), 1, 0.82, 0)
-    elseif not npc.object then
-        GameTooltip:AddLine("Click to target and mark them (when nearby)", 0.5, 0.5, 0.5)
+    -- Map pins pass how many pins overlap; the window's list doesn't, and has no alt-click
+    if stacked then
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine(self.db.hiddenVendors[key] and "Alt-click to enable" or "Alt-click to hide", 0.5, 0.5, 0.5)
     end
-    GameTooltip:AddLine("Ctrl-click to set waypoint", 0.5, 0.5, 0.5)
-    if key == self.minimapKey then
-        GameTooltip:AddLine("Right-click to remove the minimap marker", 0.35, 0.85, 0.35)
-    end
-    GameTooltip:AddLine(self.db.hiddenVendors[key] and "Alt-click to enable" or "Alt-click to hide", 0.5, 0.5, 0.5)
     GameTooltip:Show()
 end
 
@@ -1116,16 +1105,7 @@ function MM:ShowVendorTooltip(owner, key, stacked)
     end
 
     GameTooltip:AddLine(" ")
-    if stacked and stacked > 1 then
-        GameTooltip:AddLine(("Click to pick between %d overlapping vendors"):format(stacked), 1, 0.82, 0)
-    else
-        GameTooltip:AddLine("Click to target and mark them (when nearby)", 0.5, 0.5, 0.5)
-    end
-    GameTooltip:AddLine("Shift-click to see everything they sell", 0.5, 0.5, 0.5)
-    GameTooltip:AddLine("Ctrl-click to set waypoint", 0.5, 0.5, 0.5)
-    if key == self.minimapKey then
-        GameTooltip:AddLine("Right-click to remove the minimap marker", 0.35, 0.85, 0.35)
-    end
+    GameTooltip:AddLine("Shift-click for full inventory", 0.5, 0.5, 0.5)
     GameTooltip:AddLine(self.db.hiddenVendors[key] and "Alt-click to enable" or "Alt-click to hide", 0.5, 0.5, 0.5)
     GameTooltip:Show()
 end
