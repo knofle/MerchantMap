@@ -176,8 +176,9 @@ end
 
 pin:SetScript("OnClick", function() MM:ClearMinimapVendor() end)
 
--- label names the waypoint (the item you clicked); defaults to the vendor's name
-function MM:SetMinimapVendor(vendor, key, label)
+-- label names the waypoint (the item you clicked); defaults to the vendor's name.
+-- limited flags the item as limited stock at this vendor, for the arrow.
+function MM:SetMinimapVendor(vendor, key, label, limited)
     if not (vendor and vendor.mapID) then return end
     target, MM.minimapKey = vendor, key
     lastX, lastY, lastAlpha = nil, nil, nil
@@ -191,7 +192,7 @@ function MM:SetMinimapVendor(vendor, key, label)
         MM:SetWaypoint(vendor, label)
         placedWaypoint = true
     end
-    MM:SetArrowTarget(vendor, label)
+    MM:SetArrowTarget(vendor, label, limited)
     MM:RefreshMap()
 end
 

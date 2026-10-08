@@ -1391,15 +1391,29 @@ local function Row_OnEnter(self)
             where[key] = MM:LocationText(vendor)
         end
     end
-    table.sort(keys, function(a, b) return where[a] < where[b] end)
+    -- Vendors that didn't have it in stock at the last visit go together at the bottom
+    table.sort(keys, function(a, b)
+        local lateA, lateB = item.vendors[a].notSeen or false, item.vendors[b].notSeen or false
+        if lateA ~= lateB then return lateB end
+        return where[a] < where[b]
+    end)
+    local lateShown
     for i, key in ipairs(keys) do
         if i > MAX_TOOLTIP_VENDORS then
             GameTooltip:AddLine(("... and %d more"):format(#keys - MAX_TOOLTIP_VENDORS), 0.6, 0.6, 0.6)
             break
         end
-        local vendor = MM.db.vendors[key]
-        GameTooltip:AddDoubleLine(vendor.name .. " |cff999999" .. where[key] .. "|r",
-            MM:PriceText(item.vendors[key]), 1, 1, 1, 1, 1, 1)
+        local vendor, offer = MM.db.vendors[key], item.vendors[key]
+        local text = vendor.name .. " |cff999999" .. where[key] .. "|r"
+        if offer.notSeen then
+            if not lateShown then
+                lateShown = true
+                GameTooltip:AddLine("Not in stock at last visit:", 0.6, 0.6, 0.6)
+            end
+            GameTooltip:AddLine(text, 0.7, 0.7, 0.7)
+        else
+            GameTooltip:AddDoubleLine(text, MM:PriceText(offer), 1, 1, 1, 1, 1, 1)
+        end
     end
 
     local set = MM.db.itemCats[self.itemID]
@@ -1879,12 +1893,18 @@ local function DrawStock()
         local item = itemID and MM.db.items[itemID]
         local offer = item and item.vendors[stockKey]
         row.itemID = item and itemID
-        if offer then
+        if itemID == "late" then
+            row.icon:SetTexture(nil)
+            row.name:SetText("Not in stock at last visit")
+            row.name:SetTextColor(0.6, 0.6, 0.6)
+            row.price:SetText("")
+            row:Show()
+        elseif offer then
             local color = ITEM_QUALITY_COLORS[item.quality or 1] or ITEM_QUALITY_COLORS[1]
             row.icon:SetTexture(item.icon or 134400)
             row.name:SetText(item.name or "?")
             row.name:SetTextColor(color.r, color.g, color.b)
-            row.price:SetText(MM:PriceText(offer))
+            row.price:SetText(offer.notSeen and "" or MM:PriceText(offer))
             row:Show()
         else
             row:Hide()
@@ -1943,8 +1963,16 @@ function MM:ShowVendorStock(key)
     local vendor = self.db.vendors[key]
     if not vendor then return end
     stockKey, stockItems, stockOffset = key, self:VendorItems(key), 0
+    -- Those not in stock at the last visit are sorted last, under their own heading
+    local count = #stockItems
+    for i, itemID in ipairs(stockItems) do
+        if self.db.items[itemID].vendors[key].notSeen then
+            table.insert(stockItems, i, "late")
+            break
+        end
+    end
     stockName:SetText(vendor.name .. (vendor.title and (" |cff8a8a8a<" .. vendor.title .. ">|r") or ""))
-    stockInfo:SetText(("%s   %d items"):format(self:LocationText(vendor), #stockItems))
+    stockInfo:SetText(("%s   %d items"):format(self:LocationText(vendor), count))
     stock:Show()
     stock:Raise()
     DrawStock()

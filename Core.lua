@@ -261,7 +261,7 @@ end
 
 -- Classic items no one has bought yet have no price
 function MM:PriceText(offer)
-    if offer.notSeen then return "|cff8a8a8aNot seen here|r" end
+    if offer.notSeen then return "|cff8a8a8aNot in stock at last visit|r" end
     if not (offer.price or offer.cost) then return "|cff8a8a8aNo price data|r" end
     local text = offer.cost
     if offer.price and offer.price > 0 then

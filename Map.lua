@@ -743,7 +743,13 @@ local function VendorItems(key, vendor)
         local item = MM.db.items[itemID]
         if item and item.vendors[key] then ids[#ids + 1] = itemID end
     end
-    table.sort(ids, function(a, b) return (MM.db.items[a].name or "") < (MM.db.items[b].name or "") end)
+    -- Items not in stock at the last visit go last
+    table.sort(ids, function(a, b)
+        local itemA, itemB = MM.db.items[a], MM.db.items[b]
+        local lateA, lateB = itemA.vendors[key].notSeen or false, itemB.vendors[key].notSeen or false
+        if lateA ~= lateB then return lateB end
+        return (itemA.name or "") < (itemB.name or "")
+    end)
     return ids
 end
 
@@ -1073,16 +1079,18 @@ function MM:ShowVendorTooltip(owner, key, stacked)
     local matched = self.pinned and self.pinned[key]
     if not (vendor and matched) then return end
 
-    -- Full stock, with the items you searched for or selected listed first and marked
+    -- Full stock, with the items you searched for or selected listed first and marked,
+    -- and the ones not in stock at the last visit together at the bottom
     local itemIDs, isMatch = VendorItems(key, vendor), {}
     if matched ~= true then
         for _, itemID in ipairs(matched) do isMatch[itemID] = true end
-        local first, rest = {}, {}
+        local first, rest, late = {}, {}, {}
         for _, itemID in ipairs(itemIDs) do
-            local list = isMatch[itemID] and first or rest
+            local list = self.db.items[itemID].vendors[key].notSeen and late or isMatch[itemID] and first or rest
             list[#list + 1] = itemID
         end
         for _, itemID in ipairs(rest) do first[#first + 1] = itemID end
+        for _, itemID in ipairs(late) do first[#first + 1] = itemID end
         itemIDs = first
     end
 
@@ -1092,16 +1100,27 @@ function MM:ShowVendorTooltip(owner, key, stacked)
     GameTooltip:AddLine(self:LocationText(vendor), 0.8, 0.8, 0.8)
     GameTooltip:AddLine(" ")
 
+    local lateShown
     for i, itemID in ipairs(itemIDs) do
         if i > MAX_TOOLTIP_ITEMS then
             GameTooltip:AddLine(("... and %d more"):format(#itemIDs - MAX_TOOLTIP_ITEMS), 0.6, 0.6, 0.6)
             break
         end
         local item = self.db.items[itemID]
+        local offer = item.vendors[key]
         local color = ITEM_QUALITY_COLORS[item.quality or 1] or ITEM_QUALITY_COLORS[1]
         local marker = isMatch[itemID] and "|cff8fd18f>|r " or ""
-        GameTooltip:AddDoubleLine(marker .. "|T" .. (item.icon or 134400) .. ":0|t " .. (item.name or "?"),
-            self:PriceText(item.vendors[key]), color.r, color.g, color.b, 1, 1, 1)
+        local text = marker .. "|T" .. (item.icon or 134400) .. ":0|t " .. (item.name or "?")
+        if offer.notSeen then
+            if not lateShown then
+                lateShown = true
+                GameTooltip:AddLine(" ")
+                GameTooltip:AddLine("Not in stock at last visit:", 0.6, 0.6, 0.6)
+            end
+            GameTooltip:AddLine(text, color.r * 0.7, color.g * 0.7, color.b * 0.7)
+        else
+            GameTooltip:AddDoubleLine(text, self:PriceText(offer), color.r, color.g, color.b, 1, 1, 1)
+        end
     end
 
     GameTooltip:AddLine(" ")
@@ -1200,11 +1219,13 @@ local function ClosestNPC(keys, skip)
     return best
 end
 
--- Vendors whose shop didn't list the item come last: another one that has it, or might, goes first
+-- Which vendor to send you to for an item, nearest of the first group that has one on your continent:
+-- unlimited or unchecked stock, then limited stock, then vendors that didn't have it at the last visit
+local function NotUnlimited(offer) return offer.notSeen or offer.limited end
 local function NotSeen(offer) return offer.notSeen end
 
 local function ClosestVendor(item)
-    return ClosestNPC(item.vendors, NotSeen) or ClosestNPC(item.vendors)
+    return ClosestNPC(item.vendors, NotUnlimited) or ClosestNPC(item.vendors, NotSeen) or ClosestNPC(item.vendors)
 end
 
 function MM:ClosestVendorKey(itemID)
@@ -1277,7 +1298,8 @@ function MM:ShowItemOnMap(itemID)
     local name = closest and self.db.vendors[closest].name
     -- A new item replaces the old marker, or clears it when nobody on this continent sells it
     if closest then
-        self:SetMinimapVendor(self.db.vendors[closest], closest, item.name)
+        local offer = item.vendors[closest]
+        self:SetMinimapVendor(self.db.vendors[closest], closest, item.name, offer.limited and not offer.notSeen)
     else
         self:ClearMinimapVendor()
     end

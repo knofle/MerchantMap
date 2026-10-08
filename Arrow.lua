@@ -13,7 +13,7 @@ local STATUS_ICONS = {
 local INTERVAL = 0.05
 local ARRIVED = 5 -- yards
 
-local target, label
+local target, label, limited
 
 local frame = CreateFrame("Button", "MerchantMapArrow", UIParent)
 frame:SetSize(56, 56)
@@ -170,12 +170,13 @@ frame:SetScript("OnLeave", function(self)
     if not MM:IsTargetOwner(self) then GameTooltip:Hide() end
 end)
 
--- Called by the minimap marker; nil hides the arrow. itemName is shown under the vendor's name.
-function MM:SetArrowTarget(vendor, itemName)
-    target, label, shown = vendor, itemName, nil
+-- Called by the minimap marker; nil hides the arrow. itemName is shown under the vendor's name,
+-- with a red note when they only have it in limited stock.
+function MM:SetArrowTarget(vendor, itemName, limitedStock)
+    target, label, limited, shown = vendor, itemName, limitedStock, nil
     if vendor and not self.db.arrowHidden then
         name:SetText(vendor.name)
-        item:SetText(itemName or "")
+        item:SetText((itemName or "") .. (itemName and limitedStock and " |cffff4d4d(limited stock)|r" or ""))
         distance:ClearAllPoints()
         distance:SetPoint("TOP", itemName and item or name, "BOTTOM", 0, -1)
         elapsed = INTERVAL
@@ -192,7 +193,7 @@ end
 
 function MM:SetArrowShown(show)
     self.db.arrowHidden = not show or nil
-    self:SetArrowTarget(target, label)
+    self:SetArrowTarget(target, label, limited)
 end
 
 -- Arrow size as a scale of its normal 56 pixels; the text below it keeps its size
