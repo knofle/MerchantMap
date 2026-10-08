@@ -489,6 +489,8 @@ local function SeedClassic(db, recorded, seedKey, v, areaID, x, y)
         if spot then vendor.mapID, vendor.x, vendor.y, vendor.located = spot.mapID, spot.x, spot.y, spot.t end
         db.vendors[key] = vendor
     end
+    -- Your records don't store a title, so they use the Classic one
+    vendor.title = v[2] or vendor.title
     AddClassicItems(db, key, vendor, v[7])
 end
 
