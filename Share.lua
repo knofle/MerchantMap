@@ -43,7 +43,12 @@ function MM:ExportData()
                     data.items[itemID] = data.items[itemID] or { item.name, NZ(item.icon) }
                 end
             end
-            data.vendors[key] = { vendor.name, vendor.mapID, NZ(vendor.x), NZ(vendor.y), NZ(vendor.lastSeen), stock, vendor.seedID }
+            local notSeen = {}
+            for itemID in pairs(vendor.notSeen or {}) do notSeen[#notSeen + 1] = itemID end
+            data.vendors[key] = {
+                vendor.name, vendor.mapID, NZ(vendor.x), NZ(vendor.y), NZ(vendor.lastSeen), stock, vendor.seedID,
+                next(notSeen) and notSeen or nil,
+            }
             vendorCount = vendorCount + 1
         end
     end
@@ -68,7 +73,7 @@ end
 -- Takes an imported vendor's position and prices, unless yours are as new.
 -- Items the import doesn't have keep what you had for them.
 local function ImportVendor(db, key, rec, items)
-    local name, mapID, x, y, seen, stock, seedID = unpack(rec, 1, 7)
+    local name, mapID, x, y, seen, stock, seedID, notSeen = unpack(rec, 1, 8)
     x, y, seen = x or 0, y or 0, seen or 0
     local current = db.vendors[key]
     if current and not current.classic and (current.lastSeen or 0) >= seen then return false end
@@ -78,6 +83,15 @@ local function ImportVendor(db, key, rec, items)
     vendor.classic, vendor.shipped, vendor.located = nil, nil, nil
     vendor.seedID = MM:RemoveSeedFor(key, name, mapID) or seedID or vendor.seedID
     db.vendors[key] = vendor
+    -- Classic items their visit didn't see in the shop
+    for _, itemID in ipairs(notSeen or {}) do
+        if not stock[itemID] then
+            vendor.notSeen = vendor.notSeen or {}
+            vendor.notSeen[itemID] = true
+            local offer = db.items[itemID] and db.items[itemID].vendors[key]
+            if offer and offer.classic then offer.notSeen = true end
+        end
+    end
 
     for itemID, offer in pairs(stock) do
         local item = db.items[itemID]

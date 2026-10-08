@@ -129,6 +129,26 @@ end
 
 -- Scanning --------------------------------------------------------------
 
+-- Classic items the shop didn't list get a "not seen here" note. They stay listed, since your class,
+-- race or rank may be what hid them, but searches send you to another vendor for them first.
+-- Seeing one in the shop later takes the note off again.
+local function MarkNotSeen(key, vendor, seen)
+    local classicID = tonumber(tostring(vendor.seedID or key):match("^(%d+)"))
+    local classic = classicID and MM.knownVendors[classicID]
+    if not classic then return end
+    vendor.notSeen = vendor.notSeen or {}
+    for _, itemID in ipairs(classic[7]) do
+        local offer = db.items[itemID] and db.items[itemID].vendors[key]
+        if seen[itemID] then
+            vendor.notSeen[itemID] = nil
+        elseif offer and offer.classic then
+            vendor.notSeen[itemID] = true
+            offer.notSeen = true
+        end
+    end
+    if not next(vendor.notSeen) then vendor.notSeen = nil end
+end
+
 -- Vendors give a discount from Friendly upward; prices are stored without it
 local DISCOUNTS = { [5] = 0.05, [6] = 0.10, [7] = 0.15, [8] = 0.20 }
 
@@ -188,7 +208,7 @@ function MM:ScanMerchant()
     end
 
     -- Items you can't see (class, race, rank, sold out) are kept: only what you see is updated
-    local complete = true
+    local seen, complete = {}, true
     for i = 1, GetMerchantNumItems() do
         local itemID = GetMerchantItemID(i)
         local name, icon, price, numAvailable, hasCost = MerchantItem(i)
@@ -207,6 +227,7 @@ function MM:ScanMerchant()
                 limited = (numAvailable and numAvailable >= 0) or nil,
             }
             vendor.items[itemID] = true
+            seen[itemID] = true
             MM:QueueAutoCategorize(itemID)
         else
             complete = false
@@ -214,6 +235,7 @@ function MM:ScanMerchant()
     end
 
     if oldFilter then SetMerchantFilter(oldFilter) end
+    if complete then MarkNotSeen(key, vendor, seen) end
 
     scanIncomplete = not complete
     self:RefreshItemHolidays()
@@ -239,6 +261,7 @@ end
 
 -- Classic items no one has bought yet have no price
 function MM:PriceText(offer)
+    if offer.notSeen then return "|cff8a8a8aNot seen here|r" end
     if not (offer.price or offer.cost) then return "|cff8a8a8aNo price data|r" end
     local text = offer.cost
     if offer.price and offer.price > 0 then

@@ -388,7 +388,7 @@ end
 -- without touching your saved data.
 local function SeedShipped(db)
     for key, v in pairs(MM.shippedVendors) do
-        local name, mapID, x, y, seen, stock, seedID = unpack(v)
+        local name, mapID, x, y, seen, stock, seedID, notSeen = unpack(v)
         local mine = db.vendors[key]
         local base = tonumber(tostring(seedID or key):match("^(%d+)@"))
         local classic = MM.knownVendors[base or seedID or key]
@@ -397,6 +397,11 @@ local function SeedShipped(db)
         if sameFaction and not holidayOff and not (mine and (mine.lastSeen or 0) >= seen) then
             if mine then SetAside(db, key) end
             local vendor = { name = name, mapID = mapID, x = x, y = y, lastSeen = seen, seedID = seedID, items = {}, shipped = true }
+            -- Classic items nobody saw in this shop
+            for _, itemID in ipairs(notSeen or {}) do
+                vendor.notSeen = vendor.notSeen or {}
+                vendor.notSeen[itemID] = true
+            end
             db.vendors[key] = vendor
             for itemID, offer in pairs(stock) do
                 if not HolidayOff(MM.holidayItems[itemID]) then
@@ -470,6 +475,7 @@ end
 
 -- Classic items the vendor sells, without a price, for those not recorded already
 local function AddClassicItems(db, key, vendor, itemIDs)
+    local notSeen = vendor.notSeen or {}
     for _, itemID in ipairs(itemIDs) do
         if not HolidayOff(MM.holidayItems[itemID]) then
             local item = db.items[itemID]
@@ -482,7 +488,7 @@ local function AddClassicItems(db, key, vendor, itemIDs)
                 db.items[itemID] = item
             end
             if not item.vendors[key] then
-                item.vendors[key] = { classic = true }
+                item.vendors[key] = { classic = true, notSeen = notSeen[itemID] }
                 vendor.items[itemID] = true
                 MM:QueueAutoCategorize(itemID)
             end

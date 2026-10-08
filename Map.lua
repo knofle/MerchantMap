@@ -1176,8 +1176,8 @@ local function CommonMap(maps)
     return common and common[#common]
 end
 
--- Closest of the keys (NPC key -> value) on your continent
-local function ClosestNPC(keys)
+-- Closest of the keys (NPC key -> value) on your continent. skip(value) leaves some out.
+local function ClosestNPC(keys, skip)
     local playerMap = C_Map.GetBestMapForUnit("player")
     local continent = playerMap and Ancestor(playerMap, Enum.UIMapType.Continent)
     local pos = continent and C_Map.GetPlayerMapPosition(continent, "player")
@@ -1187,9 +1187,9 @@ local function ClosestNPC(keys)
     local px, py = pos:GetXY()
 
     local best, bestDist
-    for key in pairs(keys) do
+    for key, value in pairs(keys) do
         local npc = MM:GetNPC(key)
-        local shown = MM.db.showHidden or not MM.db.hiddenVendors[key]
+        local shown = (MM.db.showHidden or not MM.db.hiddenVendors[key]) and not (skip and skip(value))
         local x, y
         if shown and npc then x, y = PosOnMap(npc, continent) end
         if x then
@@ -1200,8 +1200,11 @@ local function ClosestNPC(keys)
     return best
 end
 
+-- Vendors whose shop didn't list the item come last: another one that has it, or might, goes first
+local function NotSeen(offer) return offer.notSeen end
+
 local function ClosestVendor(item)
-    return ClosestNPC(item.vendors)
+    return ClosestNPC(item.vendors, NotSeen) or ClosestNPC(item.vendors)
 end
 
 function MM:ClosestVendorKey(itemID)
