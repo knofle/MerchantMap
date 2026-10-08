@@ -708,12 +708,18 @@ local function IsNearest(id)
     return type(id) == "string" and id:sub(1, 2) == "n:"
 end
 
+-- "Flight Masters" -> "Flight Master", "Mailboxes" -> "Mailbox"
+local function Singular(word)
+    if word:find("xes$") then return word:sub(1, -3) end
+    return (word:gsub("s$", ""))
+end
+
 local function GroupLabel(id)
     local path = id:sub(3)
     local leaf = path:match("[^/]+$")
     local trainer = path:find("^Services/Trainers/") and not leaf:find("Master")
     if IsNearest(id) then
-        return "Nearest " .. (trainer and (leaf .. " Trainer") or leaf:gsub("s$", ""))
+        return "Nearest " .. (trainer and (leaf .. " Trainer") or Singular(leaf))
     end
     return "All " .. (trainer and (leaf .. " Trainers") or leaf == "Repair" and "Repairs" or leaf)
 end
