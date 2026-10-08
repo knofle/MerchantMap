@@ -118,7 +118,8 @@ local function StyleRow(row)
     row.name:SetTextColor(unpack(NAME_COLORS[row.state]))
 end
 
--- Shift-click sets a waypoint, alt-click hides or enables the vendor. Returns true if handled.
+-- Ctrl-click sets a waypoint, shift-click opens a vendor's full stock, alt-click hides or enables them.
+-- Returns true if handled.
 local function PinAction(frame)
     if IsAltKeyDown() then
         local hide = frame.state ~= "hidden"
@@ -131,9 +132,15 @@ local function PinAction(frame)
         end
         MM:RefreshMap()
         return true
-    elseif IsShiftKeyDown() then
+    elseif IsControlKeyDown() then
         MM:SetWaypoint(frame.vendor)
         if spread then spread:Hide() end
+        return true
+    elseif IsShiftKeyDown() then
+        if not frame.vendor.service then
+            MM:ShowVendorStock(frame.key)
+            if spread then spread:Hide() end
+        end
         return true
     end
 end
@@ -741,8 +748,14 @@ local function VendorItems(key, vendor)
         local item = MM.db.items[itemID]
         if item and item.vendors[key] then ids[#ids + 1] = itemID end
     end
-    table.sort(ids, function(a, b) return MM.db.items[a].name < MM.db.items[b].name end)
+    table.sort(ids, function(a, b) return (MM.db.items[a].name or "") < (MM.db.items[b].name or "") end)
     return ids
+end
+
+-- Everything a vendor sells that's shown, by name
+function MM:VendorItems(key)
+    local vendor = self.db.vendors[key]
+    return vendor and VendorItems(key, vendor) or {}
 end
 
 local function PinState(key, vendor)
@@ -1020,7 +1033,7 @@ function MM:ShowServiceTooltip(owner, key, stacked, anchor)
     elseif not npc.object then
         GameTooltip:AddLine("Click to target and mark them (when nearby)", 0.5, 0.5, 0.5)
     end
-    GameTooltip:AddLine("Shift-click to set waypoint", 0.5, 0.5, 0.5)
+    GameTooltip:AddLine("Ctrl-click to set waypoint", 0.5, 0.5, 0.5)
     if key == self.minimapKey then
         GameTooltip:AddLine("Right-click to remove the minimap marker", 0.35, 0.85, 0.35)
     end
@@ -1098,7 +1111,7 @@ function MM:ShowVendorTooltip(owner, key, stacked)
         local item = self.db.items[itemID]
         local color = ITEM_QUALITY_COLORS[item.quality or 1] or ITEM_QUALITY_COLORS[1]
         local marker = isMatch[itemID] and "|cff8fd18f>|r " or ""
-        GameTooltip:AddDoubleLine(marker .. "|T" .. (item.icon or 134400) .. ":0|t " .. item.name,
+        GameTooltip:AddDoubleLine(marker .. "|T" .. (item.icon or 134400) .. ":0|t " .. (item.name or "?"),
             self:PriceText(item.vendors[key]), color.r, color.g, color.b, 1, 1, 1)
     end
 
@@ -1108,7 +1121,8 @@ function MM:ShowVendorTooltip(owner, key, stacked)
     else
         GameTooltip:AddLine("Click to target and mark them (when nearby)", 0.5, 0.5, 0.5)
     end
-    GameTooltip:AddLine("Shift-click to set waypoint", 0.5, 0.5, 0.5)
+    GameTooltip:AddLine("Shift-click to see everything they sell", 0.5, 0.5, 0.5)
+    GameTooltip:AddLine("Ctrl-click to set waypoint", 0.5, 0.5, 0.5)
     if key == self.minimapKey then
         GameTooltip:AddLine("Right-click to remove the minimap marker", 0.35, 0.85, 0.35)
     end
