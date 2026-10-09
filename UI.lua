@@ -1227,17 +1227,19 @@ function MM:RefreshList()
         return na < nb
     end)
 
-    -- A search finding several items gets "Nearest vendor for <search>" on top
+    -- A search or category with several items gets "Nearest vendor for <search or category>" on top
     local ids = nearestItems.ids
     wipe(ids)
     for _, id in ipairs(results) do
         if not IsService(id) then ids[#ids + 1] = id end
     end
     nearestItems.key = nil
-    if query ~= "" and #ids > 1 then
+    if (query ~= "" or cat ~= ALL) and #ids > 1 then
+        local word = query ~= "" and query or scope
         nearestItems.key = self:ClosestVendorFor(ids)
-        nearestItems.label = 'Nearest vendor for "' .. query .. '"'
-        nearestItems.arrow = (query:gsub("^%l", strupper)) -- the item line on the arrow
+        nearestItems.label = query ~= "" and ('Nearest vendor for "' .. query .. '"') or ("Nearest vendor for " .. scope)
+        nearestItems.what = query ~= "" and "search" or "category"
+        nearestItems.arrow = (word:gsub("^%l", strupper)) -- the item line on the arrow
         nearestItems.icon = db.items[ids[1]].icon
         -- Once picked, the items that vendor sells come right under it
         local key = selected == nearestItems.id and nearestItems.key
@@ -1552,8 +1554,8 @@ local function NearestItemsTooltip(self)
     GameTooltip:SetOwner(self, TooltipAnchor())
     PlaceTooltip()
     GameTooltip:AddLine(nearestItems.label, ACCENT[1], ACCENT[2], ACCENT[3])
-    GameTooltip:AddLine(("The closest vendor selling any of the %d items in this search. "
-        .. "Search more precisely to narrow it down."):format(#nearestItems.ids), 0.6, 0.6, 0.6, true)
+    GameTooltip:AddLine(("The closest vendor selling any of the %d items in this %s. "
+        .. "Search more precisely to narrow it down."):format(#nearestItems.ids, nearestItems.what), 0.6, 0.6, 0.6, true)
     GameTooltip:AddLine(" ")
     if not vendor then
         GameTooltip:AddLine("No vendor on this continent", 0.6, 0.6, 0.6)
@@ -1929,6 +1931,16 @@ local function CreateItemRow(i)
     row:SetScript("OnDragStop", Row_OnDragStop)
     return row
 end
+
+-- A quick mouse move can skip a row's leave, leaving its highlight and tooltip behind; clear them
+CreateFrame("Frame", nil, list):SetScript("OnUpdate", function()
+    for _, row in ipairs(rows) do
+        if row.hover:IsShown() and not row:IsMouseOver() then
+            row.hover:Hide()
+            if GameTooltip:IsOwned(row) then GameTooltip:Hide() end
+        end
+    end
+end)
 
 list:SetScript("OnMouseWheel", function(_, delta)
     offset = offset - delta * 3
