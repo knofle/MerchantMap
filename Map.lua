@@ -1281,6 +1281,21 @@ function MM:ClosestVendorKey(itemID)
     return item and ClosestVendor(item)
 end
 
+-- Closest vendor selling any of the items, judged by its best offer of them
+local function OfferRank(offer) return offer.notSeen and 2 or offer.limited and 1 or 0 end
+
+function MM:ClosestVendorFor(itemIDs)
+    local offers = {}
+    for _, itemID in ipairs(itemIDs) do
+        local item = self.db.items[itemID]
+        for key, offer in pairs(item and item.vendors or {}) do
+            if not offers[key] or OfferRank(offer) < OfferRank(offers[key]) then offers[key] = offer end
+        end
+    end
+    local key = ClosestVendor({ vendors = offers })
+    return key, key and offers[key]
+end
+
 -- Closest of a set of service NPC keys
 function MM:ClosestServiceKey(keys)
     return ClosestNPC(keys)
@@ -1356,6 +1371,19 @@ function MM:ShowItemOnMap(itemID)
         -- Vendor is right here: leave a closed map closed, show an open one on your zone
         if TargetIsHere(name) then return end
         MM:OpenMapForItem(itemID)
+    end)
+end
+
+-- Closest vendor selling any of the items, shown like a single item's
+function MM:ShowVendorForItems(itemIDs, label)
+    local key, offer = self:ClosestVendorFor(itemIDs)
+    if not key then return self:ClearMinimapVendor() end
+    local vendor = self.db.vendors[key]
+    self:SetMinimapVendor(vendor, key, label, offer.limited and not offer.notSeen)
+    C_Timer.After(0.1, function()
+        if TargetIsHere(vendor.name) then return end
+        local zone = Ancestor(vendor.mapID, Enum.UIMapType.Zone)
+        if zone then OpenMapAt(zone) end
     end)
 end
 

@@ -755,6 +755,10 @@ local function IsNearest(id)
     return type(id) == "string" and id:sub(1, 2) == "n:"
 end
 
+-- The "Nearest vendor for <search>" row on top of a search with several items: the closest vendor
+-- selling any of them. ids are the matched items, key the closest vendor at the last refresh.
+local nearestItems = { id = "v:", ids = {} }
+
 -- "Flight Masters" -> "Flight Master", "Mailboxes" -> "Mailbox"
 local function Singular(word)
     if word:find("xes$") then return word:sub(1, -3) end
@@ -1024,7 +1028,16 @@ local function DrawRows()
         local group = IsGroup(itemID)
         local npc = itemID and not group and IsService(itemID) and MM.services[itemID]
         local item = itemID and not npc and not group and MM.db.items[itemID]
-        if group then
+        if itemID == nearestItems.id then
+            local vendor = nearestItems.key and MM.db.vendors[nearestItems.key]
+            row.itemID = itemID
+            row.icon:SetTexture(nearestItems.icon or 134400)
+            row.name:SetText(nearestItems.label)
+            row.name:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
+            row.info:SetText(vendor and MM:ZoneName(vendor) or "Not on this continent")
+            row.sel:SetShown(itemID == selected)
+            row:Show()
+        elseif group then
             local path = itemID:sub(3)
             local key = IsNearest(itemID) and ServiceKey(itemID)
             local closest = key and MM.services[key]
@@ -1140,12 +1153,39 @@ function MM:RefreshList()
         return na < nb
     end)
 
+    -- A search finding several items gets "Nearest vendor for <search>" on top
+    local ids = nearestItems.ids
+    wipe(ids)
+    for _, id in ipairs(results) do
+        if not IsService(id) then ids[#ids + 1] = id end
+    end
+    nearestItems.key = nil
+    if query ~= "" and #ids > 1 then
+        nearestItems.key = self:ClosestVendorFor(ids)
+        nearestItems.label = 'Nearest vendor for "' .. query .. '"'
+        nearestItems.arrow = (query:gsub("^%l", strupper)) -- the item line on the arrow
+        nearestItems.icon = db.items[ids[1]].icon
+        table.insert(results, 1, nearestItems.id)
+    elseif selected == nearestItems.id then
+        selected = nil
+    end
+
     -- Pin the selected item, or everything shown when searching or browsing a category
     local source = selected and { selected } or ((query ~= "" or low or usable or cat ~= ALL) and results) or nil
     if source then
         self.activeVendors = {}
         for _, id in ipairs(source) do
-            if IsGroup(id) and not IsNearest(id) then
+            if id == nearestItems.id then
+                -- Selected, it pins only the closest vendor, with the matched items it sells
+                local key = selected == id and nearestItems.key
+                if key then
+                    local sold = {}
+                    for _, itemID in ipairs(ids) do
+                        if db.items[itemID].vendors[key] then sold[#sold + 1] = itemID end
+                    end
+                    self.activeVendors[key] = sold
+                end
+            elseif IsGroup(id) and not IsNearest(id) then
                 -- An "All" row pins the whole category
                 for key in pairs(groups[id:sub(3)] or {}) do
                     self.activeVendors[key] = self.activeVendors[key] or {}
@@ -1169,7 +1209,8 @@ function MM:RefreshList()
 
     local vendorCount = 0
     for _ in pairs(self.activeVendors or {}) do vendorCount = vendorCount + 1 end
-    status:SetText(("%d items   %d vendors on map"):format(#results, vendorCount))
+    local count = #results - (results[1] == nearestItems.id and 1 or 0)
+    status:SetText(("%d items   %d vendors on map"):format(count, vendorCount))
 
     if not next(db.items) then
         empty:SetText("Open a vendor to start recording.")
@@ -1418,7 +1459,46 @@ local function PlaceTooltip()
     GameTooltip:SetPoint(p[1], panel, p[2], p[3], p[4])
 end
 
+-- The closest vendor and which of the matched items they sell
+local function NearestItemsTooltip(self)
+    local key = MM:ClosestVendorFor(nearestItems.ids)
+    local vendor = key and MM.db.vendors[key]
+    GameTooltip:SetOwner(self, TooltipAnchor())
+    PlaceTooltip()
+    GameTooltip:AddLine(nearestItems.label, ACCENT[1], ACCENT[2], ACCENT[3])
+    GameTooltip:AddLine(("The closest vendor selling any of the %d items in this search. "
+        .. "Search more precisely to narrow it down."):format(#nearestItems.ids), 0.6, 0.6, 0.6, true)
+    GameTooltip:AddLine(" ")
+    if not vendor then
+        GameTooltip:AddLine("No vendor on this continent", 0.6, 0.6, 0.6)
+        return GameTooltip:Show()
+    end
+    GameTooltip:AddLine(vendor.name, 1, 1, 1)
+    GameTooltip:AddLine(MM:LocationText(vendor), 0.6, 0.6, 0.6)
+    GameTooltip:AddLine(" ")
+    local sold = {}
+    for _, itemID in ipairs(nearestItems.ids) do
+        local offer = MM.db.items[itemID].vendors[key]
+        if offer then sold[#sold + 1] = itemID end
+    end
+    for i, itemID in ipairs(sold) do
+        if i > MAX_TOOLTIP_VENDORS then
+            GameTooltip:AddLine(("... and %d more"):format(#sold - MAX_TOOLTIP_VENDORS), 0.6, 0.6, 0.6)
+            break
+        end
+        local item = MM.db.items[itemID]
+        local color = ITEM_QUALITY_COLORS[item.quality or 1] or ITEM_QUALITY_COLORS[1]
+        GameTooltip:AddDoubleLine("|T" .. (item.icon or 134400) .. ":0|t " .. item.name,
+            MM:PriceText(item.vendors[key]), color.r, color.g, color.b, 1, 1, 1)
+    end
+    GameTooltip:Show()
+end
+
 local function Row_OnEnter(self)
+    if self.itemID == nearestItems.id then
+        if not dragIcon:IsShown() then NearestItemsTooltip(self) end
+        return
+    end
     if IsGroup(self.itemID) and not IsNearest(self.itemID) then
         GameTooltip:SetOwner(self, TooltipAnchor())
         PlaceTooltip()
@@ -1525,7 +1605,7 @@ local function Row_OnClick(self, button)
     local itemID = self.itemID
     if not itemID then return end
 
-    -- Service NPCs: click to show and mark them, right-click to clear the selection
+    -- Service NPCs and the nearest vendor row: click to show and mark them, right-click to clear
     if IsService(itemID) then
         if IsModifiedClick() then return end
         if button == "RightButton" or selected == itemID then
@@ -1537,7 +1617,9 @@ local function Row_OnClick(self, button)
         else
             selected = itemID
             local key = ServiceKey(itemID)
-            if IsGroup(itemID) and not IsNearest(itemID) then
+            if itemID == nearestItems.id then
+                MM:ShowVendorForItems(nearestItems.ids, nearestItems.arrow)
+            elseif IsGroup(itemID) and not IsNearest(itemID) then
                 MM:ShowServicesOnMap(groups[itemID:sub(3)])
             elseif key then
                 MM:ShowServiceOnMap(key)
@@ -1688,7 +1770,10 @@ function Row_Hover(self)
     if not self.itemID then return end
     -- Items target their closest vendor, service NPCs themselves
     local vendor
-    if IsService(self.itemID) then
+    if self.itemID == nearestItems.id then
+        local key = MM:ClosestVendorFor(nearestItems.ids)
+        vendor = key and MM.db.vendors[key]
+    elseif IsService(self.itemID) then
         local key = ServiceKey(self.itemID)
         vendor = key and MM.services[key]
     else
