@@ -2142,9 +2142,9 @@ local function Tip(text) return "|cffffffff" .. text .. "|r" end
 
 local TIPS = table.concat({
     "|cffccb084Searching|r",
-    "Type part of a name: " .. Tip("linen") .. ". Every word has to match: " .. Tip("heavy linen") .. ".",
+    "Type all or part of a name. Every word has to match.",
     "Words also match categories: " .. Tip("tailoring materials") .. ", " .. Tip("food") .. ".",
-    "Shorthands: " .. Tip("lw bs alch ench engi") .. " and the like, " .. Tip("mats") .. " for materials.",
+    "Shorthands: " .. Tip("lw bs alch ench engi") .. ", " .. Tip("mats") .. " for materials.",
     "",
     "|cffccb084Gear|r",
     "Armor or weapon type and slot: " .. Tip("mail gloves") .. ", " .. Tip("2h sword") .. ".",
@@ -2167,8 +2167,9 @@ local TIPS = table.concat({
     Tip("/mm hunter trainer") .. ". A single match goes straight to the nearest one.",
     "",
     "|cffccb084Once you've found it|r",
-    "Click it to mark the nearest vendor that has it, and target them when close enough. "
+    "Click an item to mark its nearest vendor, and target them when close enough. "
         .. "Shift-click to link it in chat.",
+    "Or click " .. Tip("Nearest vendor for") .. " at the top for the closest vendor selling anything in your results.",
 }, "\n")
 
 local tips = CreateFrame("Frame", "MerchantMapSearchTips", UIParent)
