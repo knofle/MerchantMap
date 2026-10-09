@@ -80,6 +80,14 @@ function MM:InitCategories()
         for _, path in ipairs(DEFAULTS) do self:AddCategory(path) end
     end
 
+    -- Mana food and drink is filed under "Drink" now
+    local MANA, DRINK = "Consumables/Food & Drink/Mana", "Consumables/Food & Drink/Drink"
+    if db.categories[MANA] then
+        Remap(db.categories, MANA, DRINK)
+        Remap(db.collapsed, MANA, DRINK)
+        for _, set in pairs(db.itemCats) do Remap(set, MANA, DRINK) end
+    end
+
     -- Categories you made, which unlike the addon's can be renamed and deleted.
     -- Before this was tracked, anything outside the addon's own top-level categories counts as yours.
     if not db.userCategories then

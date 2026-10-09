@@ -628,6 +628,17 @@ local SLOT_WORDS = {
 -- Singular forms that aren't already part of the plural subtype name
 local SUBTYPE_WORDS = { staves = "staff" }
 
+-- The item type, subtype and slot as shown in game, with the words each one matches
+local function GearParts(itemID)
+    local _, itemType, subType, equipLoc = C_Item.GetItemInfoInstant(itemID)
+    local sub = strlower(subType or "")
+    return {
+        { itemType, strlower(itemType or "") },
+        { subType ~= itemType and subType, sub .. " " .. (SUBTYPE_WORDS[sub] or "") },
+        { _G[equipLoc or ""], SLOT_WORDS[equipLoc] or "" },
+    }
+end
+
 local gearWords = {}
 local function GearWords(itemID)
     local words = gearWords[itemID]
@@ -671,6 +682,66 @@ local function Matches(itemID, tokens)
         if PathMatches(name, gear, "Holidays/" .. holiday, tokens) then return true end
     end
     return false
+end
+
+-- Why an item is in the search results when its name alone doesn't explain it, for its tooltip.
+-- The type or category is shown with the searched letters in white and the rest grey.
+local searchTokens, MatchReason = EMPTY, nil
+
+do
+local function MarkWord(lower, word, marked)
+    local s, e = lower:find(word, 1, true)
+    if s then
+        for i = s, e do marked[i] = true end
+    end
+end
+
+local function Highlight(text)
+    local lower, marked = strlower(text), {}
+    for _, t in ipairs(searchTokens) do
+        if t.alias then MarkWord(lower, t.alias, marked) end
+        if not t.alias or #t.word > 2 then MarkWord(lower, t.word, marked) end
+    end
+    local out, i = {}, 1
+    while i <= #text do
+        local on, j = marked[i] or false, i
+        while j < #text and (marked[j + 1] or false) == on do j = j + 1 end
+        out[#out + 1] = (on and "|cffffffff" or "|cff8a8a8a") .. text:sub(i, j) .. "|r"
+        i = j + 1
+    end
+    return table.concat(out)
+end
+
+function MatchReason(itemID)
+    local name, gear = LowerName(itemID), GearWords(itemID)
+    local inName, inGear = true, true
+    for _, t in ipairs(searchTokens) do
+        if not TokenIn(name, t) then
+            inName = false
+            if not TokenIn(gear, t) then inGear = false end
+        end
+    end
+    if inName then return end
+    if inGear then
+        local names = {}
+        for _, part in ipairs(GearParts(itemID)) do
+            for _, t in ipairs(searchTokens) do
+                if part[1] and not TokenIn(name, t) and TokenIn(part[2], t) then
+                    names[#names + 1] = part[1]
+                    break
+                end
+            end
+        end
+        return "|cff8a8a8aItem type:|r " .. Highlight(table.concat(names, ", "))
+    end
+    for path in pairs(MM.db.itemCats[itemID] or EMPTY) do
+        if PathMatches(name, gear, path, searchTokens) then return "|cff8a8a8aCategory:|r " .. Highlight(path) end
+    end
+    for holiday in pairs(MM:ItemHolidayPaths(itemID) or EMPTY) do
+        local path = "Holidays/" .. holiday
+        if PathMatches(name, gear, path, searchTokens) then return "|cff8a8a8aCategory:|r " .. Highlight(path) end
+    end
+end
 end
 
 -- Service NPCs ------------------------------------------------------------
@@ -839,7 +910,7 @@ local CATEGORY_ICONS = {
     ["Holidays"] = 17303, ["Feast of Winter Veil"] = 17202, ["Hallow's End"] = 20557,
     ["Lunar Festival"] = 21747, ["Love is in the Air"] = 21815, ["Children's Week"] = 23161,
     ["Darkmoon Faire (Elwynn Forest)"] = 19302, ["Darkmoon Faire (Mulgore)"] = 19302,
-    ["Consumables"] = 118, ["Food & Drink"] = 4540, ["Food"] = 117, ["Mana"] = 159, ["Buff Food"] = 2680,
+    ["Consumables"] = 118, ["Food & Drink"] = 4540, ["Food"] = 117, ["Drink"] = 159, ["Buff Food"] = 2680,
     ["Ammo"] = 2512, ["Arrows"] = 2512, ["Bullets"] = 2516, ["Potions"] = 118, ["Elixirs"] = 5997,
     ["Flasks"] = 13510, ["Scrolls"] = 955, ["Bandages"] = 1251, ["Explosives"] = 4358,
     ["Weapon Enhancements"] = 2862,
@@ -1023,6 +1094,7 @@ local Row_Hover -- defined with the item rows below
 
 local function DrawRows()
     offset = math.max(0, math.min(offset, #results - ROWS))
+    local soldKey = selected == nearestItems.id and nearestItems.key
     for i, row in ipairs(rows) do
         local itemID = i <= ROWS and results[offset + i]
         local group = IsGroup(itemID)
@@ -1079,6 +1151,7 @@ local function DrawRows()
             row.itemID = nil
             row:Hide()
         end
+        row.sold:SetShown(item and soldKey and item.vendors[soldKey] and true or false)
     end
     UpdateScrollbar(list, offset, #results, ROWS)
     -- Rows shift under a still cursor when scrolling or refreshing; re-aim the targeting
@@ -1096,6 +1169,7 @@ function MM:RefreshList()
     local db = self.db
     local query, low, high, usable = ParseQuery(strlower(strtrim(box:GetText())))
     local tokens = Tokens(query)
+    searchTokens = tokens
 
     if category ~= ALL and category ~= UNCAT and not db.categories[category] and not ServicePaths()[category]
         and not MM:HolidayPaths()[category] then
@@ -1165,6 +1239,18 @@ function MM:RefreshList()
         nearestItems.label = 'Nearest vendor for "' .. query .. '"'
         nearestItems.arrow = (query:gsub("^%l", strupper)) -- the item line on the arrow
         nearestItems.icon = db.items[ids[1]].icon
+        -- Once picked, the items that vendor sells come right under it
+        local key = selected == nearestItems.id and nearestItems.key
+        if key then
+            local sold, rest = {}, {}
+            for _, id in ipairs(results) do
+                local list = not IsService(id) and db.items[id].vendors[key] and sold or rest
+                list[#list + 1] = id
+            end
+            wipe(results)
+            for _, id in ipairs(sold) do results[#results + 1] = id end
+            for _, id in ipairs(rest) do results[#results + 1] = id end
+        end
         table.insert(results, 1, nearestItems.id)
     elseif selected == nearestItems.id then
         selected = nil
@@ -1520,6 +1606,11 @@ local function Row_OnEnter(self)
     GameTooltip:SetOwner(self, TooltipAnchor())
     PlaceTooltip()
     GameTooltip:SetItemByID(self.itemID)
+    local reason = MatchReason(self.itemID)
+    if reason then
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine(reason)
+    end
     GameTooltip:AddLine(" ")
     GameTooltip:AddLine("Sold by:", ACCENT[1], ACCENT[2], ACCENT[3])
 
@@ -1808,6 +1899,11 @@ local function CreateItemRow(i)
     row.sel = row:CreateTexture(nil, "BACKGROUND")
     row.sel:SetAllPoints()
     row.sel:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.2)
+
+    -- Faint tint on items sold by the picked "Nearest vendor for" vendor
+    row.sold = row:CreateTexture(nil, "BACKGROUND", nil, -1)
+    row.sold:SetAllPoints()
+    row.sold:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.07)
 
     row.icon = row:CreateTexture(nil, "ARTWORK")
     row.icon:SetSize(16, 16)

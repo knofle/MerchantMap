@@ -107,6 +107,16 @@ local function Classify(itemID)
     local _, _, subType, equipLoc, _, classID, subclassID = C_Item.GetItemInfoInstant(itemID)
     local lname = strlower(name)
     local text = strlower(table.concat(lines, "\n"))
+
+    -- A consumable's "Use:" text comes from its spell, which loads separately: wait for it,
+    -- or food and drink lands in Consumables/Other
+    local getSpell = C_Item.GetItemSpell or GetItemSpell
+    local spellID = classID == CLASS.Consumable and getSpell and select(2, getSpell(itemID))
+    if spellID and C_Spell and C_Spell.IsSpellDataCached and not C_Spell.IsSpellDataCached(spellID) then
+        C_Spell.RequestLoadSpellData(spellID)
+        return
+    end
+    if spellID and not text:find("use:", 1, true) then return end
     local equippable = equipLoc and equipLoc ~= "" and equipLoc ~= "INVTYPE_NON_EQUIP_IGNORE"
     local paths = {}
     local function Add(path) paths[#paths + 1] = path end
@@ -165,7 +175,7 @@ local function Classify(itemID)
     local health = isFoodDrink and text:find("restores[^\n]-health")
     local mana = isFoodDrink and text:find("restores[^\n]-mana")
     if health then Add("Consumables/Food & Drink/Food") end
-    if mana then Add("Consumables/Food & Drink/Mana") end
+    if mana then Add("Consumables/Food & Drink/Drink") end
     if text:find("well fed", 1, true) then Add("Consumables/Food & Drink/Buff Food") end
 
     if classID == CLASS.Consumable and not (health or mana) then
@@ -289,6 +299,16 @@ events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function()
     local db = MM.db
     db.overridden = db.overridden or {}
+    -- Food and drink read before its "Use:" text had loaded went to Consumables/Other: sorted again once
+    if not db.recheckedOther then
+        db.recheckedOther = true
+        for itemID, set in pairs(db.itemCats) do
+            local only = next(set)
+            if only == "Consumables/Other" and not next(set, only) then
+                db.itemCats[itemID], db.autoDone[itemID] = nil, nil
+            end
+        end
+    end
     for itemID, item in pairs(db.items) do
         -- Already sorted before an override was added: moved once, so your own changes stick
         local path = item.name and OVERRIDES[strlower(item.name)]
