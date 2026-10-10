@@ -13,5 +13,8 @@ externals:
   Libs/LibDeflate:
     url: https://github.com/SafeteeWoW/LibDeflate.git
 
+ignore:
+  - Tools
+
 move-folders:
  MerchantMap/MerchantMap: MerchantMap

@@ -210,7 +210,7 @@ local function CreateSpread()
 
     local footer = spread:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
     footer:SetPoint("BOTTOMLEFT", 8, 7)
-    footer:SetText("Shift-click: waypoint    Alt-click: hide")
+    footer:SetText("Shift-click: full stock    Alt-click: hide")
 
     -- Stays open until you click somewhere else
     spread:SetScript("OnShow", function(self) self:RegisterEvent("GLOBAL_MOUSE_DOWN") end)
@@ -296,7 +296,7 @@ end
 
 -- /mm debug prints what the targeting sees, to track down skull problems
 local function Debug(...)
-    if MM.debug then print("|cffccb084VA debug:|r", ...) end
+    if MM.debug then print("|cffccb084MM debug:|r", ...) end
 end
 
 local markEvents = CreateFrame("Frame")
@@ -417,12 +417,12 @@ local function HideTargetButton()
     if targetButton and not targetButton.dragging and not InCombatLockdown() then targetButton:Hide() end
 end
 
--- opts: name (defaults to the owner's vendor), rightClick, onEnter, onLeave, onClick, onDragStart, onDragStop
 -- Name the targeting macro uses; mailboxes and other objects can't be targeted
 function MM:TargetName(npc)
     return npc and not npc.object and npc.name or nil
 end
 
+-- opts: name (defaults to the owner's vendor), rightClick, onEnter, onLeave, onClick, onDragStart, onDragStop
 local function AttachTargetButton(owner, opts)
     -- A list refresh mid-drag would re-aim the button and lose the drop
     if InCombatLockdown() or (targetButton and targetButton.dragging) then return end

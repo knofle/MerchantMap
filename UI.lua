@@ -301,7 +301,6 @@ optionsBtn:SetNormalFontObject("MM_GameFontNormalSmall")
 optionsBtn:SetText("Options")
 optionsBtn:SetScript("OnClick", function() MM:OpenOptions() end)
 
--- Holidays: a toggle for each holiday's vendors and items, all off by default
 -- Search tips: a window explaining every way to search
 local tipsBtn = CreateFrame("Button", nil, header)
 tipsBtn:SetSize(74, 18)
@@ -311,6 +310,7 @@ tipsBtn:SetNormalFontObject("MM_GameFontNormalSmall")
 tipsBtn:SetText("Search tips")
 tipsBtn:SetScript("OnClick", function() MM:ToggleSearchTips() end)
 
+-- Holidays: a toggle for each holiday's vendors and items, all off by default
 local holidayBtn = CreateFrame("Button", nil, header)
 holidayBtn:SetSize(64, 18)
 holidayBtn:SetPoint("RIGHT", tipsBtn, "LEFT", -6, 0)
@@ -1576,7 +1576,7 @@ local function NearestItemsTooltip(self)
         end
         local item = MM.db.items[itemID]
         local color = ITEM_QUALITY_COLORS[item.quality or 1] or ITEM_QUALITY_COLORS[1]
-        GameTooltip:AddDoubleLine("|T" .. (item.icon or 134400) .. ":0|t " .. item.name,
+        GameTooltip:AddDoubleLine("|T" .. (item.icon or 134400) .. ":0|t " .. (item.name or "?"),
             MM:PriceText(item.vendors[key]), color.r, color.g, color.b, 1, 1, 1)
     end
     GameTooltip:Show()
