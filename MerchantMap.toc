@@ -24,7 +24,11 @@ Map.lua
 Pins.xml
 Minimap.lua
 Arrow.lua
+Widgets.lua
+Search.lua
 UI.lua
+StockWindow.lua
+SearchTips.lua
 MinimapButton.lua
 Share.lua
 Options.lua

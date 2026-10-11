@@ -1,6 +1,8 @@
 local _, MM = ...
 
-local ROW_H = 20
+-- Frame helpers from Widgets.lua, search matching from Search.lua
+local W, S = MM.W, MM.Search
+local ROW_H = W.ROW_H
 -- Visible rows; recalculated when the window is resized
 local ROWS, TREE_ROWS = 18, 16
 local TREE_W, LIST_W = 196, 360
@@ -16,7 +18,7 @@ local nodes, treeOffset, category = {}, 0, ALL
 local function ActiveCategory()
     return MM.db.compact and ALL or category
 end
-local counts, lowerNames, lowerPaths, sortKeys = {}, {}, {}, {}
+local counts, sortKeys = {}, {}
 local editMode
 -- Tree and counts only change with data or category edits, not while typing or scrolling
 local treeDirty, countsDirty = true, true
@@ -26,158 +28,9 @@ local function MarkDirty()
     treeDirty, countsDirty = true, true
 end
 
--- Widgets -----------------------------------------------------------------
-
-local function Border(frame, r, g, b, a)
-    for _, side in ipairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
-        local t = frame:CreateTexture(nil, "BORDER")
-        t:SetColorTexture(r, g, b, a or 1)
-        if side == "TOP" or side == "BOTTOM" then
-            t:SetPoint(side .. "LEFT")
-            t:SetPoint(side .. "RIGHT")
-            t:SetHeight(1)
-        else
-            t:SetPoint("TOP" .. side)
-            t:SetPoint("BOTTOM" .. side)
-            t:SetWidth(1)
-        end
-    end
-end
-
-local function Background(frame, r, g, b, a)
-    local t = frame:CreateTexture(nil, "BACKGROUND")
-    t:SetAllPoints()
-    t:SetColorTexture(r, g, b, a)
-    return t
-end
-
-local function Fill(frame, color, alpha)
-    return Background(frame, color[1], color[2], color[3], alpha or 1)
-end
-
-local function Outline(frame, color, alpha)
-    Border(frame, color[1], color[2], color[3], alpha or 1)
-end
-
--- Subtle tiled grain over a flat fill
-local function Grain(frame, alpha)
-    local t = frame:CreateTexture(nil, "BACKGROUND", nil, 1)
-    t:SetAllPoints()
-    t:SetTexture(MM.GRAIN, "REPEAT", "REPEAT")
-    t:SetHorizTile(true)
-    t:SetVertTile(true)
-    t:SetAlpha(alpha)
-end
-
--- Vertical gradient between two colors, lighter at the top
-local function Gradient(frame, bottom, top, layer, sublevel)
-    local t = frame:CreateTexture(nil, layer or "BACKGROUND", nil, sublevel or 2)
-    t:SetAllPoints()
-    t:SetColorTexture(1, 1, 1, 1)
-    if t.SetGradient and CreateColor then
-        t:SetGradient("VERTICAL", CreateColor(bottom[1], bottom[2], bottom[3], 1),
-            CreateColor(top[1], top[2], top[3], 1))
-    else
-        t:SetColorTexture(bottom[1], bottom[2], bottom[3], 1)
-    end
-    return t
-end
-
--- Raised button look: gradient face, bronze edge, soft hover
-local function SkinButton(b)
-    Gradient(b, C.button, C.buttonTop)
-    Outline(b, BORDER)
-    local hl = b:CreateTexture()
-    hl:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.12)
-    b:SetHighlightTexture(hl)
-end
-
-local function EditBox(parent)
-    local box = CreateFrame("EditBox", nil, parent)
-    box:SetFontObject("MM_ChatFontNormal")
-    box:SetAutoFocus(false)
-    box:SetTextInsets(6, 6, 0, 0)
-    Fill(box, C.inset, 0.95)
-    Outline(box, BORDER)
-    return box
-end
-
-local function TextButton(parent, text, width)
-    local b = CreateFrame("Button", nil, parent)
-    b:SetSize(width, 20)
-    SkinButton(b)
-    b:SetNormalFontObject("MM_GameFontHighlightSmall")
-    b:SetHighlightFontObject("MM_GameFontNormalSmall")
-    b:SetDisabledFontObject("MM_GameFontDisableSmall")
-    b:SetText(text)
-    return b
-end
-
-local function SetTooltip(frame, text)
-    frame:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(text, 1, 1, 1, 1, true)
-        GameTooltip:Show()
-    end)
-    frame:SetScript("OnLeave", GameTooltip_Hide)
-end
-
-local SCROLL_W = 8
-
--- Thin track with a draggable thumb. frame.onScroll(pos) is set once the frame's draw function exists.
-local function AddScrollbar(frame)
-    frame.track = frame:CreateTexture(nil, "ARTWORK")
-    frame.track:SetPoint("TOPRIGHT")
-    frame.track:SetPoint("BOTTOMRIGHT")
-    frame.track:SetWidth(SCROLL_W)
-    frame.track:SetColorTexture(1, 1, 1, 0.05)
-
-    local thumb = CreateFrame("Frame", nil, frame)
-    thumb:SetWidth(SCROLL_W)
-    thumb:EnableMouse(true)
-    local tex = thumb:CreateTexture(nil, "OVERLAY")
-    tex:SetAllPoints()
-    tex:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.7)
-
-    thumb:SetScript("OnEnter", function() tex:SetAlpha(1) end)
-    thumb:SetScript("OnLeave", function(self)
-        if not self.dragY then tex:SetAlpha(0.7) end
-    end)
-    -- OnUpdate only runs while dragging
-    local function Drag(self)
-        local _, y = GetCursorPosition()
-        local travel = frame:GetHeight() - self:GetHeight()
-        if travel > 0 then
-            local moved = (self.dragY - y / self:GetEffectiveScale()) / travel
-            frame.onScroll(math.floor(self.dragPos + moved * (frame.scrollTotal - frame.scrollVisible) + 0.5))
-        end
-    end
-    thumb:SetScript("OnMouseDown", function(self)
-        local _, y = GetCursorPosition()
-        self.dragY, self.dragPos = y / self:GetEffectiveScale(), frame.scrollPos
-        self:SetScript("OnUpdate", Drag)
-    end)
-    thumb:SetScript("OnMouseUp", function(self)
-        self.dragY = nil
-        self:SetScript("OnUpdate", nil)
-        if not self:IsMouseOver() then tex:SetAlpha(0.7) end
-    end)
-    frame.thumb = thumb
-end
-
-local function UpdateScrollbar(frame, pos, total, visible)
-    frame.scrollPos, frame.scrollTotal, frame.scrollVisible = pos, total, visible
-    local scrolls = total > visible
-    frame.track:SetShown(scrolls)
-    frame.thumb:SetShown(scrolls)
-    if scrolls then
-        local h = frame:GetHeight()
-        local size = math.max(20, h * visible / total)
-        frame.thumb:SetHeight(size)
-        frame.thumb:ClearAllPoints()
-        frame.thumb:SetPoint("TOPRIGHT", 0, -(h - size) * pos / (total - visible))
-    end
-end
+local Fill, Outline, Grain, Gradient, SkinButton = W.Fill, W.Outline, W.Grain, W.Gradient, W.SkinButton
+local EditBox, TextButton, SetTooltip = W.EditBox, W.TextButton, W.SetTooltip
+local AddScrollbar, UpdateScrollbar, SCROLL_W = W.AddScrollbar, W.UpdateScrollbar, W.SCROLL_W
 
 -- Layout ------------------------------------------------------------------
 
@@ -206,6 +59,11 @@ rule:SetPoint("BOTTOMLEFT")
 rule:SetPoint("BOTTOMRIGHT")
 rule:SetColorTexture(BORDER[1], BORDER[2], BORDER[3], 1)
 tinsert(UISpecialFrames, "MerchantMapFrame")
+-- The stock and search tips windows open above it
+MM.panel = panel
+-- Closes when combat starts
+panel:RegisterEvent("PLAYER_REGEN_DISABLED")
+panel:SetScript("OnEvent", panel.Hide)
 
 -- Position is shared; the full and compact views each remember their own size
 local function SaveGeometry()
@@ -463,302 +321,10 @@ dragIcon.hint:SetPoint("TOPLEFT", dragIcon, "RIGHT", 6, -1)
 
 local treeRows, rows = {}, {}
 
--- Data --------------------------------------------------------------------
-
-local function LowerName(itemID)
-    local name = lowerNames[itemID]
-    if not name then
-        name = strlower(MM.db.items[itemID].name or "")
-        lowerNames[itemID] = name
-    end
-    return name
-end
-
--- Search shorthands; two-letter ones only match their expansion
-local ALIASES = {
-    alch = "alchemy", bs = "blacksmithing", cook = "cooking", ench = "enchanting", engi = "engineering",
-    fish = "fishing", lw = "leatherworking", herb = "herbalism", mine = "mining", skin = "skinning",
-    mats = "materials",
-}
-
-local function Tokens(query)
-    local tokens = {}
-    for word in query:gmatch("%S+") do
-        tokens[#tokens + 1] = { word = word, alias = ALIASES[word] }
-    end
-    return tokens
-end
-
-local function TokenIn(text, t)
-    return (t.alias and text:find(t.alias, 1, true))
-        or ((not t.alias or #t.word > 2) and text:find(t.word, 1, true))
-end
-
-local function LowerPath(path)
-    local lower = lowerPaths[path]
-    if not lower then
-        lower = strlower(path)
-        lowerPaths[path] = lower
-    end
-    return lower
-end
-
--- A level range like "1-15", "over 30", "under 30" (or a single level like "45") in the search keeps items whose
--- required level, or profession skill for recipes, is inside it; items with no requirement are left out
--- Returns the words left to match, the level range, and whether "usable" was asked for
-local function ParseQuery(query)
-    local low, high, usable
-    local rest = query:gsub("(%d+)%s*%-%s*(%d+)", function(a, b)
-        low, high = tonumber(a), tonumber(b)
-        return " "
-    end)
-    if low and high and low > high then low, high = high, low end
-
-    -- "over 30" and "under 30" (both including 30), alone or together with each other
-    rest = rest:gsub("over%s+(%d+)", function(n)
-        low, high = tonumber(n), high or math.huge
-        return " "
-    end)
-    rest = rest:gsub("under%s+(%d+)", function(n)
-        low, high = low or 1, tonumber(n)
-        return " "
-    end)
-
-    -- A number on its own is an exact level: "45" is the same as "45-45"
-    local words = {}
-    for word in rest:gmatch("%S+") do
-        local level = not low and word:match("^%d+$") and tonumber(word)
-        if level then
-            low, high = level, level
-        elseif word == "usable" then
-            usable = true
-        else
-            words[#words + 1] = word
-        end
-    end
-    return table.concat(words, " "), low, high, usable
-end
-
--- Required levels come from the item cache; uncached items are requested and fill in later.
--- For recipes the "level" is the profession skill they need, read from the tooltip.
-local levels, pendingLevels = {}, {}
-local RECIPE_CLASS = 9
-
-local function RecipeSkill(itemID)
-    local data = C_TooltipInfo and C_TooltipInfo.GetItemByID(itemID)
-    for _, line in ipairs(data and data.lines or {}) do
-        local skill = line.leftText and line.leftText:match("^Requires .- %((%d+)%)$")
-        if skill then return tonumber(skill) end
-    end
-    return 0
-end
-
-local function RequiredLevel(itemID)
-    local level = levels[itemID]
-    if level == nil then
-        if not C_Item.IsItemDataCachedByID(itemID) then
-            pendingLevels[itemID] = true
-            C_Item.RequestLoadItemDataByID(itemID)
-            return
-        end
-        local _, _, _, _, _, classID = C_Item.GetItemInfoInstant(itemID)
-        if classID == RECIPE_CLASS then
-            level = RecipeSkill(itemID)
-        else
-            level = select(5, C_Item.GetItemInfo(itemID)) or 0
-        end
-        levels[itemID] = level
-    end
-    return level
-end
-
--- "usable": no red text in the item's tooltip (level, armor type, class, reputation, skill, already known).
--- Uncached items are requested and fill in later, like levels. Cleared when any of that can change.
-local usableCache = {}
-
-local function IsRed(color)
-    return color and color.r > 0.99 and color.g < 0.2 and color.b < 0.2
-end
-
-local function Usable(itemID)
-    local known = usableCache[itemID]
-    if known ~= nil then return known end
-    if not C_Item.IsItemDataCachedByID(itemID) then
-        pendingLevels[itemID] = true
-        C_Item.RequestLoadItemDataByID(itemID)
-        return false
-    end
-    local data = C_TooltipInfo and C_TooltipInfo.GetItemByID(itemID)
-    if not (data and data.lines) then return false end
-    known = true
-    for _, line in ipairs(data.lines) do
-        if (line.leftText and IsRed(line.leftColor)) or (line.rightText and IsRed(line.rightColor)) then
-            known = false
-            break
-        end
-    end
-    usableCache[itemID] = known
-    return known
-end
-
-local usableEvents = CreateFrame("Frame")
-for _, event in ipairs({ "PLAYER_LEVEL_UP", "SKILL_LINES_CHANGED", "UPDATE_FACTION", "LEARNED_SPELL_IN_TAB", "NEW_RECIPE_LEARNED" }) do
-    pcall(usableEvents.RegisterEvent, usableEvents, event)
-end
-usableEvents:SetScript("OnEvent", function() wipe(usableCache) end)
-
-local function LevelOK(itemID, low, high)
-    local level = RequiredLevel(itemID)
-    if not level then return false end
-    return level >= low and level <= high
-end
-
--- Item type, subtype and slot words, so "staff", "mail legs" or "2h sword" find gear
-local SLOT_WORDS = {
-    INVTYPE_HEAD = "head helm", INVTYPE_NECK = "neck", INVTYPE_SHOULDER = "shoulder",
-    INVTYPE_CLOAK = "back cloak", INVTYPE_CHEST = "chest", INVTYPE_ROBE = "chest robe",
-    INVTYPE_BODY = "shirt", INVTYPE_TABARD = "tabard", INVTYPE_WRIST = "wrist bracers",
-    INVTYPE_HAND = "hands gloves", INVTYPE_WAIST = "waist belt", INVTYPE_LEGS = "legs pants",
-    INVTYPE_FEET = "feet boots", INVTYPE_FINGER = "finger ring", INVTYPE_TRINKET = "trinket",
-    INVTYPE_WEAPON = "one-hand 1h", INVTYPE_2HWEAPON = "two-hand 2h",
-    INVTYPE_WEAPONMAINHAND = "main hand 1h", INVTYPE_WEAPONOFFHAND = "off hand 1h",
-    INVTYPE_SHIELD = "shield off hand", INVTYPE_HOLDABLE = "off hand held",
-    INVTYPE_RANGED = "ranged", INVTYPE_RANGEDRIGHT = "ranged", INVTYPE_THROWN = "thrown ranged",
-}
--- Singular forms that aren't already part of the plural subtype name
-local SUBTYPE_WORDS = { staves = "staff" }
-
--- The item type, subtype and slot as shown in game, with the words each one matches
-local function GearParts(itemID)
-    local _, itemType, subType, equipLoc = C_Item.GetItemInfoInstant(itemID)
-    local sub = strlower(subType or "")
-    return {
-        { itemType, strlower(itemType or "") },
-        { subType ~= itemType and subType, sub .. " " .. (SUBTYPE_WORDS[sub] or "") },
-        { _G[equipLoc or ""], SLOT_WORDS[equipLoc] or "" },
-    }
-end
-
-local gearWords = {}
-local function GearWords(itemID)
-    local words = gearWords[itemID]
-    if not words then
-        local _, itemType, subType, equipLoc = C_Item.GetItemInfoInstant(itemID)
-        local sub = strlower(subType or "")
-        words = strlower(itemType or "") .. " " .. sub .. " " .. (SUBTYPE_WORDS[sub] or "")
-            .. " " .. (SLOT_WORDS[equipLoc] or "")
-        gearWords[itemID] = words
-    end
-    return words
-end
-
-local EMPTY = {}
-
--- Every word in the item's name, gear words or this category path
-local function PathMatches(name, gear, path, tokens)
-    local lower = LowerPath(path)
-    for _, t in ipairs(tokens) do
-        if not (TokenIn(name, t) or TokenIn(gear, t) or TokenIn(lower, t)) then return false end
-    end
-    return true
-end
-
--- Every word must match the item's name or gear words, or those plus one of its category paths
-local function Matches(itemID, tokens)
-    local name, gear = LowerName(itemID), GearWords(itemID)
-    local missing = false
-    for _, t in ipairs(tokens) do
-        if not (TokenIn(name, t) or TokenIn(gear, t)) then
-            missing = true
-            break
-        end
-    end
-    if not missing then return true end
-
-    for path in pairs(MM.db.itemCats[itemID] or EMPTY) do
-        if PathMatches(name, gear, path, tokens) then return true end
-    end
-    for holiday in pairs(MM:ItemHolidayPaths(itemID) or EMPTY) do
-        if PathMatches(name, gear, "Holidays/" .. holiday, tokens) then return true end
-    end
-    return false
-end
-
--- Why an item is in the search results when its name alone doesn't explain it, for its tooltip.
--- The type or category is shown with the searched letters in white and the rest grey.
-local searchTokens, MatchReason = EMPTY, nil
-
-do
-local function MarkWord(lower, word, marked)
-    local s, e = lower:find(word, 1, true)
-    if s then
-        for i = s, e do marked[i] = true end
-    end
-end
-
-local function Highlight(text)
-    local lower, marked = strlower(text), {}
-    for _, t in ipairs(searchTokens) do
-        if t.alias then MarkWord(lower, t.alias, marked) end
-        if not t.alias or #t.word > 2 then MarkWord(lower, t.word, marked) end
-    end
-    local out, i = {}, 1
-    while i <= #text do
-        local on, j = marked[i] or false, i
-        while j < #text and (marked[j + 1] or false) == on do j = j + 1 end
-        out[#out + 1] = (on and "|cffffffff" or "|cff8a8a8a") .. text:sub(i, j) .. "|r"
-        i = j + 1
-    end
-    return table.concat(out)
-end
-
-function MatchReason(itemID)
-    local name, gear = LowerName(itemID), GearWords(itemID)
-    local inName, inGear = true, true
-    for _, t in ipairs(searchTokens) do
-        if not TokenIn(name, t) then
-            inName = false
-            if not TokenIn(gear, t) then inGear = false end
-        end
-    end
-    if inName then return end
-    if inGear then
-        local names = {}
-        for _, part in ipairs(GearParts(itemID)) do
-            for _, t in ipairs(searchTokens) do
-                if part[1] and not TokenIn(name, t) and TokenIn(part[2], t) then
-                    names[#names + 1] = part[1]
-                    break
-                end
-            end
-        end
-        return "|cff8a8a8aItem type:|r " .. Highlight(table.concat(names, ", "))
-    end
-    for path in pairs(MM.db.itemCats[itemID] or EMPTY) do
-        if PathMatches(name, gear, path, searchTokens) then return "|cff8a8a8aCategory:|r " .. Highlight(path) end
-    end
-    for holiday in pairs(MM:ItemHolidayPaths(itemID) or EMPTY) do
-        local path = "Holidays/" .. holiday
-        if PathMatches(name, gear, path, searchTokens) then return "|cff8a8a8aCategory:|r " .. Highlight(path) end
-    end
-end
-end
-
 -- Service NPCs ------------------------------------------------------------
 -- Trainers, flight masters and the like are listed as "s" .. npcID keys next to item IDs,
 -- under a "Services" category tree that isn't saved and can't be edited.
 
-local SERVICE_WORDS = {
-    ["Services/Flight Masters"] = "flight path fp gryphon wind rider",
-    ["Services/Innkeepers"] = "inn hearthstone",
-    ["Services/Bankers"] = "bank",
-    ["Services/Auctioneers"] = "auction ah",
-    ["Services/Battlemasters"] = "battleground bg pvp",
-    ["Services/Guild Masters"] = "guild tabard charter",
-    ["Services/Stable Masters"] = "stable pet",
-    ["Services/Transmogrifiers"] = "transmog tmog xmog",
-    ["Services/Mailboxes"] = "mail post",
-}
 
 local function IsService(id)
     return type(id) == "string"
@@ -786,25 +352,6 @@ local function ServicePaths()
     return servicePaths or {}
 end
 
-local function ServiceText(npc)
-    if not npc.search then
-        local parts = { npc.name, npc.title or "" }
-        for _, path in ipairs(npc.paths) do
-            parts[#parts + 1] = path
-            parts[#parts + 1] = SERVICE_WORDS[path] or ""
-        end
-        npc.search = strlower(table.concat(parts, " "))
-    end
-    return npc.search
-end
-
-local function ServiceMatches(npc, tokens)
-    local text = ServiceText(npc)
-    for _, t in ipairs(tokens) do
-        if not TokenIn(text, t) then return false end
-    end
-    return true
-end
 
 local function ServiceInCategory(npc, cat)
     if cat == ALL then return true end
@@ -872,7 +419,7 @@ local function SortName(id)
     -- Nearest and All rows of a category stay together
     if IsGroup(id) then return strlower(id:sub(3)) .. (IsNearest(id) and "1" or "2") end
     if IsService(id) then return strlower(MM.services[id].name) end
-    return LowerName(id)
+    return S.LowerName(id)
 end
 
 local ROOT_COLORS = {
@@ -1167,9 +714,9 @@ function MM:RefreshList()
     end
     if not panel:IsShown() then return end
     local db = self.db
-    local query, low, high, usable = ParseQuery(strlower(strtrim(box:GetText())))
-    local tokens = Tokens(query)
-    searchTokens = tokens
+    local query, low, high, usable = S.ParseQuery(strlower(strtrim(box:GetText())))
+    local tokens = S.Tokens(query)
+    S.tokens = tokens
 
     if category ~= ALL and category ~= UNCAT and not db.categories[category] and not ServicePaths()[category]
         and not MM:HolidayPaths()[category] then
@@ -1191,9 +738,9 @@ function MM:RefreshList()
     wipe(results)
     for itemID in pairs(db.items) do
         if self:ItemInCategory(itemID, cat)
-            and (query == "" or Matches(itemID, tokens))
-            and (not low or LevelOK(itemID, low, high))
-            and (not usable or Usable(itemID)) then
+            and (query == "" or S.Matches(itemID, tokens))
+            and (not low or S.LevelOK(itemID, low, high))
+            and (not usable or S.Usable(itemID)) then
             results[#results + 1] = itemID
         end
     end
@@ -1203,7 +750,7 @@ function MM:RefreshList()
         local paths = {}
         for key, npc in pairs(MM.services) do
             if ServiceInCategory(npc, cat)
-                and (query == "" or ServiceMatches(npc, tokens)) then
+                and (query == "" or S.ServiceMatches(npc, tokens)) then
                 results[#results + 1] = key
                 for _, path in ipairs(npc.paths) do paths[path] = true end
             end
@@ -1211,7 +758,7 @@ function MM:RefreshList()
         -- An "All" row for each matching category with more than one NPC, and "Nearest" when searching
         for path in pairs(paths) do
             if groupSizes[path] > 1 and ServiceInCategory({ paths = { path } }, cat)
-                and ServiceMatches({ paths = { path }, name = "" }, tokens) then
+                and S.ServiceMatches({ paths = { path }, name = "" }, tokens) then
                 results[#results + 1] = "a:" .. path
                 if query ~= "" then results[#results + 1] = "n:" .. path end
             end
@@ -1314,27 +861,29 @@ end
 
 -- Scans and auto-categorizing can fire in bursts, so refresh at most every quarter second
 local dataTimer
+local function FlushData()
+    dataTimer = nil
+    if panel:IsShown() then
+        MM:RefreshList()
+    else
+        MM:RefreshMap()
+    end
+end
+
 function MM:OnDataChanged()
     MarkDirty()
     servicePaths = nil -- a newly found NPC can bring a new Services category
-    wipe(lowerNames)
-    if dataTimer then return end
-    dataTimer = C_Timer.NewTimer(0.25, function()
-        dataTimer = nil
-        if panel:IsShown() then
-            MM:RefreshList()
-        else
-            MM:RefreshMap()
-        end
-    end)
+    S.ResetNames()
+    if not dataTimer then dataTimer = C_Timer.NewTimer(0.25, FlushData) end
 end
 
--- Merchant Map is locked during combat: its windows close and won't open until it ends
-local function InCombat()
-    if not InCombatLockdown() then return false end
-    print("|cffccb084Merchant Map:|r not available in combat.")
-    return true
+-- Auto-categorizing only changes the tree and counts, never pins, so a closed window needs nothing
+function MM:OnCategoriesChanged()
+    MarkDirty()
+    if not dataTimer and panel:IsShown() then dataTimer = C_Timer.NewTimer(0.25, FlushData) end
 end
+
+local InCombat = W.InCombat
 
 function MM:Toggle()
     if panel:IsShown() then
@@ -1608,7 +1157,7 @@ local function Row_OnEnter(self)
     GameTooltip:SetOwner(self, TooltipAnchor())
     PlaceTooltip()
     GameTooltip:SetItemByID(self.itemID)
-    local reason = MatchReason(self.itemID)
+    local reason = S.MatchReason(self.itemID)
     if reason then
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine(reason)
@@ -1957,8 +1506,8 @@ end
 local levelEvents = CreateFrame("Frame")
 levelEvents:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 levelEvents:SetScript("OnEvent", function(_, _, itemID)
-    if not pendingLevels[itemID] then return end
-    pendingLevels[itemID] = nil
+    if not S.pending[itemID] then return end
+    S.pending[itemID] = nil
     if panel:IsShown() and not refreshTimer then
         refreshTimer = C_Timer.NewTimer(0.2, function() MM:RefreshList() end)
     end
@@ -2054,11 +1603,11 @@ compactBtn:SetScript("OnClick", function() SetCompact(true) end)
 expandBtn:SetScript("OnClick", function() SetCompact(false) end)
 
 -- Window scale from the options, 75% to 150%, for the main window and the ones it opens
-local scaledFrames = { panel }
+tinsert(W.scaled, panel)
 
 function MM:SetWindowScale(scale)
     self.db.windowScale = scale ~= 1 and scale or nil
-    for _, frame in ipairs(scaledFrames) do frame:SetScale(scale) end
+    for _, frame in ipairs(W.scaled) do frame:SetScale(scale) end
 end
 
 panel:SetScript("OnShow", function()
@@ -2088,291 +1637,6 @@ panel:SetScript("OnHide", function()
     MM.activeVendors = nil
     MM:RefreshMap()
 end)
-
-do
--- Vendor stock window: everything one vendor sells, opened by shift-clicking them on the map ----
-
-local STOCK_ROWS, STOCK_W = 18, 320
-local stock = CreateFrame("Frame", "MerchantMapStockFrame", UIParent)
-stock:SetSize(STOCK_W, 64 + STOCK_ROWS * ROW_H + 10)
-stock:SetPoint("CENTER", 220, 0)
-stock:SetFrameStrata("FULLSCREEN_DIALOG")
-stock:SetClampedToScreen(true)
-stock:SetMovable(true)
-stock:EnableMouse(true)
-stock:RegisterForDrag("LeftButton")
-stock:SetScript("OnDragStart", stock.StartMoving)
-stock:SetScript("OnDragStop", stock.StopMovingOrSizing)
-stock:Hide()
-Fill(stock, C.bg, 0.97)
-Grain(stock, 0.35)
-Outline(stock, BORDER)
-tinsert(UISpecialFrames, "MerchantMapStockFrame")
-
-local stockHeader = CreateFrame("Frame", nil, stock)
-stockHeader:SetPoint("TOPLEFT", 1, -1)
-stockHeader:SetPoint("TOPRIGHT", -1, -1)
-stockHeader:SetHeight(52)
-Gradient(stockHeader, C.bg, C.header)
-
-local stockName = stockHeader:CreateFontString(nil, "OVERLAY", "MM_GameFontNormal")
-stockName:SetPoint("TOPLEFT", 10, -8)
-stockName:SetPoint("RIGHT", -28, 0)
-stockName:SetJustifyH("LEFT")
-stockName:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
-local stockInfo = stockHeader:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
-stockInfo:SetPoint("TOPLEFT", stockName, "BOTTOMLEFT", 0, -4)
-stockInfo:SetPoint("RIGHT", -10, 0)
-stockInfo:SetJustifyH("LEFT")
-
-local stockClose = CreateFrame("Button", nil, stockHeader)
-stockClose:SetSize(20, 20)
-stockClose:SetPoint("TOPRIGHT", -4, -4)
-stockClose:SetNormalFontObject("MM_GameFontHighlight")
-stockClose:SetHighlightFontObject("MM_GameFontNormal")
-stockClose:SetText("x")
-stockClose:SetScript("OnClick", function() stock:Hide() end)
-
-local stockList = CreateFrame("Frame", nil, stock)
-stockList:SetPoint("TOPLEFT", 8, -60)
-stockList:SetPoint("BOTTOMRIGHT", -8, 8)
-Fill(stockList, C.inset, 0.95)
-AddScrollbar(stockList)
-
-local stockKey, stockItems, stockOffset = nil, {}, 0
-local stockRows = {}
-
-local function DrawStock()
-    stockOffset = math.max(0, math.min(stockOffset, #stockItems - STOCK_ROWS))
-    for i, row in ipairs(stockRows) do
-        local itemID = stockItems[stockOffset + i]
-        local item = itemID and MM.db.items[itemID]
-        local offer = item and item.vendors[stockKey]
-        row.itemID = item and itemID
-        if itemID == "late" then
-            row.icon:SetTexture(nil)
-            row.name:SetText("Not in stock at last visit")
-            row.name:SetTextColor(0.6, 0.6, 0.6)
-            row.price:SetText("")
-            row:Show()
-        elseif offer then
-            local color = ITEM_QUALITY_COLORS[item.quality or 1] or ITEM_QUALITY_COLORS[1]
-            row.icon:SetTexture(item.icon or 134400)
-            row.name:SetText(item.name or "?")
-            row.name:SetTextColor(color.r, color.g, color.b)
-            row.price:SetText(offer.notSeen and "" or MM:PriceText(offer))
-            row:Show()
-        else
-            row:Hide()
-        end
-    end
-    UpdateScrollbar(stockList, stockOffset, #stockItems, STOCK_ROWS)
-end
-stockList.onScroll = function(pos)
-    stockOffset = pos
-    DrawStock()
-end
-stockList:EnableMouseWheel(true)
-stockList:SetScript("OnMouseWheel", function(_, delta)
-    stockOffset = stockOffset - delta * 3
-    DrawStock()
-end)
-
-for i = 1, STOCK_ROWS do
-    local row = CreateFrame("Button", nil, stockList)
-    row:SetHeight(ROW_H)
-    row:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H)
-    row:SetPoint("RIGHT", -(SCROLL_W + 4), 0)
-    local hl = row:CreateTexture()
-    hl:SetColorTexture(1, 1, 1, 0.06)
-    row:SetHighlightTexture(hl)
-    row.icon = row:CreateTexture(nil, "ARTWORK")
-    row.icon:SetSize(ROW_H - 4, ROW_H - 4)
-    row.icon:SetPoint("LEFT", 4, 0)
-    row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    row.price = row:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
-    row.price:SetPoint("RIGHT", -4, 0)
-    row.name = row:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
-    row.name:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
-    row.name:SetPoint("RIGHT", row.price, "LEFT", -6, 0)
-    row.name:SetJustifyH("LEFT")
-    row.name:SetWordWrap(false)
-    row:SetScript("OnEnter", function(self)
-        if not self.itemID then return end
-        GameTooltip:SetOwner(stock, "ANCHOR_NONE")
-        GameTooltip:SetPoint("TOPLEFT", stock, "TOPRIGHT", 4, 0)
-        GameTooltip:SetItemByID(self.itemID)
-        GameTooltip:Show()
-    end)
-    row:SetScript("OnLeave", GameTooltip_Hide)
-    -- Shift-click links the item in chat, like anywhere else
-    row:SetScript("OnClick", function(self)
-        if not (self.itemID and IsModifiedClick()) then return end
-        local item = MM.db.items[self.itemID]
-        local link = item.link or select(2, C_Item.GetItemInfo(self.itemID))
-        if link then HandleModifiedItemClick(link) end
-    end)
-    stockRows[i] = row
-end
-
-function MM:ShowVendorStock(key)
-    local vendor = self.db.vendors[key]
-    if not vendor or InCombat() then return end
-    stockKey, stockItems, stockOffset = key, self:VendorItems(key), 0
-    -- Those not in stock at the last visit are sorted last, under their own heading
-    local count = #stockItems
-    for i, itemID in ipairs(stockItems) do
-        if self.db.items[itemID].vendors[key].notSeen then
-            table.insert(stockItems, i, "late")
-            break
-        end
-    end
-    stockName:SetText(vendor.name .. (vendor.title and (" |cff8a8a8a<" .. vendor.title .. ">|r") or ""))
-    stockInfo:SetText(("%s   %d items"):format(self:LocationText(vendor), count))
-    stock:Show()
-    stock:SetFrameLevel(panel:GetFrameLevel() + 100)
-    DrawStock()
-end
-
--- Prices and names that load later show up while it's open
-stock:SetScript("OnShow", function()
-    stock:SetScale(MM.db.windowScale or 1)
-    stock:SetFrameLevel(panel:GetFrameLevel() + 100)
-    DrawStock()
-end)
-tinsert(scaledFrames, stock)
-end
-
-do
--- Search tips window ----------------------------------------------------------
-
-local function Tip(text) return "|cffffffff" .. text .. "|r" end
-
-local TIPS = table.concat({
-    "|cffccb084Searching|r",
-    "Type all or part of a name. Every word has to match.",
-    "Words also match categories: " .. Tip("tailoring materials") .. ", " .. Tip("food") .. ".",
-    "Shorthands: " .. Tip("lw bs alch ench engi") .. ", " .. Tip("mats") .. " for materials.",
-    "",
-    "|cffccb084Gear|r",
-    "Armor or weapon type and slot: " .. Tip("mail gloves") .. ", " .. Tip("2h sword") .. ".",
-    "",
-    "|cffccb084Levels|r",
-    Tip("20-30") .. ", " .. Tip("45") .. ", " .. Tip("over 30") .. " or " .. Tip("under 30") .. ", with or without words: "
-        .. Tip("food 10-20") .. ". For recipes it's the skill they need.",
-    "",
-    "|cffccb084Only what you can use|r",
-    "Add " .. Tip("usable") .. " to hide anything with red text in its tooltip: " .. Tip("usable mail 20-30") .. ".",
-    "",
-    "|cffccb084Trainers and other NPCs|r",
-    Tip("hunter trainer") .. ", " .. Tip("repair") .. ", " .. Tip("flight master") .. ", " .. Tip("mailbox") .. "...",
-    "Nearest goes to the closest one, All shows every one on the map.",
-    "",
-    "|cffccb084Categories and holidays|r",
-    "Click a category to search inside it. Holiday items show once that holiday is turned on.",
-    "",
-    "|cffccb084From chat|r",
-    Tip("/mm hunter trainer") .. ". A single match goes straight to the nearest one.",
-    "",
-    "|cffccb084Once you've found it|r",
-    "Click an item to mark its nearest vendor, and target them when close enough. "
-        .. "Shift-click to link it in chat.",
-    "Or click " .. Tip("Nearest vendor for") .. " at the top for the closest vendor selling anything in your results.",
-}, "\n")
-
-local tips = CreateFrame("Frame", "MerchantMapSearchTips", UIParent)
-tips:SetSize(380, 330)
-tips:SetPoint("CENTER", -240, 0)
-tips:SetFrameStrata("FULLSCREEN_DIALOG")
-tips:SetClampedToScreen(true)
-tips:SetMovable(true)
-tips:EnableMouse(true)
-tips:RegisterForDrag("LeftButton")
-tips:SetScript("OnDragStart", tips.StartMoving)
-tips:SetScript("OnDragStop", tips.StopMovingOrSizing)
-tips:Hide()
-Fill(tips, C.bg, 0.97)
-Grain(tips, 0.35)
-Outline(tips, BORDER)
-tinsert(UISpecialFrames, "MerchantMapSearchTips")
-
-local tipsHeader = CreateFrame("Frame", nil, tips)
-tipsHeader:SetPoint("TOPLEFT", 1, -1)
-tipsHeader:SetPoint("TOPRIGHT", -1, -1)
-tipsHeader:SetHeight(25)
-Gradient(tipsHeader, C.bg, C.header)
-local tipsTitle = tipsHeader:CreateFontString(nil, "OVERLAY", "MM_GameFontNormal")
-tipsTitle:SetPoint("TOPLEFT", 10, -7)
-tipsTitle:SetText("Search tips")
-tipsTitle:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
-local tipsClose = CreateFrame("Button", nil, tipsHeader)
-tipsClose:SetSize(20, 20)
-tipsClose:SetPoint("TOPRIGHT", -4, -2)
-tipsClose:SetNormalFontObject("MM_GameFontHighlight")
-tipsClose:SetHighlightFontObject("MM_GameFontNormal")
-tipsClose:SetText("x")
-tipsClose:SetScript("OnClick", function() tips:Hide() end)
-
--- The text scrolls with the mouse wheel or the thin bar on the right
-local tipsScroll = CreateFrame("ScrollFrame", nil, tips)
-tipsScroll:SetPoint("TOPLEFT", 12, -34)
-tipsScroll:SetPoint("BOTTOMRIGHT", -22, 10)
-local tipsContent = CreateFrame("Frame", nil, tipsScroll)
-tipsContent:SetSize(1, 1)
-tipsScroll:SetScrollChild(tipsContent)
-local tipsText = tipsContent:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
-tipsText:SetPoint("TOPLEFT")
-tipsText:SetJustifyH("LEFT")
-tipsText:SetSpacing(3)
-tipsText:SetTextColor(unpack(C.text))
-tipsText:SetText(TIPS)
-
-local tipsBar = CreateFrame("Slider", nil, tips)
-tipsBar:SetPoint("TOPRIGHT", -8, -34)
-tipsBar:SetPoint("BOTTOMRIGHT", -8, 10)
-tipsBar:SetWidth(6)
-tipsBar:SetOrientation("VERTICAL")
-tipsBar:SetMinMaxValues(0, 0)
-local tipsTrack = tipsBar:CreateTexture(nil, "BACKGROUND")
-tipsTrack:SetAllPoints()
-tipsTrack:SetColorTexture(1, 1, 1, 0.05)
-local tipsThumb = tipsBar:CreateTexture(nil, "ARTWORK")
-tipsThumb:SetSize(6, 40)
-tipsThumb:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.7)
-tipsBar:SetThumbTexture(tipsThumb)
-tipsBar:SetScript("OnValueChanged", function(_, value) tipsScroll:SetVerticalScroll(value) end)
-tipsScroll:EnableMouseWheel(true)
-tipsScroll:SetScript("OnMouseWheel", function(_, delta) tipsBar:SetValue(tipsBar:GetValue() - delta * 40) end)
-
-local function LayoutTips()
-    local width = tipsScroll:GetWidth()
-    tipsText:SetWidth(width)
-    tipsContent:SetSize(width, tipsText:GetStringHeight() + 4)
-    local range = math.max(0, tipsContent:GetHeight() - tipsScroll:GetHeight())
-    tipsBar:SetMinMaxValues(0, range)
-    tipsBar:SetShown(range > 0)
-end
--- Same strata as the main window, so it needs a frame level above everything in it
-tips:SetScript("OnShow", function()
-    tips:SetScale(MM.db.windowScale or 1)
-    tips:SetFrameLevel(panel:GetFrameLevel() + 100)
-    LayoutTips()
-end)
-tinsert(scaledFrames, tips)
-tipsScroll:SetScript("OnSizeChanged", LayoutTips)
-
-function MM:ToggleSearchTips()
-    tips:SetShown(not tips:IsShown())
-end
-
-local combatEvents = CreateFrame("Frame")
-combatEvents:RegisterEvent("PLAYER_REGEN_DISABLED")
-combatEvents:SetScript("OnEvent", function()
-    panel:Hide()
-    MerchantMapStockFrame:Hide()
-    tips:Hide()
-end)
-end
 
 SLASH_MERCHANTMAP1 = "/mm"
 SLASH_MERCHANTMAP2 = "/merchantmap"

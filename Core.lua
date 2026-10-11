@@ -132,6 +132,29 @@ end
 -- Classic items the shop didn't list get a "not seen here" note. They stay listed, since your class,
 -- race or rank may be what hid them, but searches send you to another vendor for them first.
 -- Seeing one in the shop later takes the note off again.
+-- Items the shop wouldn't list to you anyway: locked to other classes (like Warlock grimoires).
+-- nil while the item is still loading, since we can't tell yet.
+local CLASSES = (ITEM_CLASSES_ALLOWED or "Classes: %s"):gsub("%%s", "")
+
+local function HiddenFromMe(itemID)
+    if not C_Item.IsItemDataCachedByID(itemID) then
+        C_Item.RequestLoadItemDataByID(itemID)
+        return nil
+    end
+    local data = C_TooltipInfo and C_TooltipInfo.GetItemByID(itemID)
+    local myClass = UnitClass("player")
+    for _, line in ipairs(data and data.lines or {}) do
+        local text = line.leftText
+        if text and text:sub(1, #CLASSES) == CLASSES then
+            for class in text:sub(#CLASSES + 1):gmatch("[^,]+") do
+                if strtrim(class) == myClass then return false end
+            end
+            return true
+        end
+    end
+    return false
+end
+
 local function MarkNotSeen(key, vendor, seen)
     local classicID = tonumber(tostring(vendor.seedID or key):match("^(%d+)"))
     local classic = classicID and MM.knownVendors[classicID]
@@ -142,8 +165,14 @@ local function MarkNotSeen(key, vendor, seen)
         if seen[itemID] then
             vendor.notSeen[itemID] = nil
         elseif offer and offer.classic then
-            vendor.notSeen[itemID] = true
-            offer.notSeen = true
+            -- Hidden from you: not missing, and an older mark from it is taken off.
+            -- Still loading: left as it was until a visit can tell.
+            local hidden = HiddenFromMe(itemID)
+            if hidden ~= nil then
+                local missing = not hidden or nil
+                vendor.notSeen[itemID] = missing
+                offer.notSeen = missing
+            end
         end
     end
     if not next(vendor.notSeen) then vendor.notSeen = nil end
@@ -238,7 +267,10 @@ function MM:ScanMerchant()
     if complete then MarkNotSeen(key, vendor, seen) end
 
     scanIncomplete = not complete
-    self:RefreshItemHolidays()
+    -- Only holiday vendors ("npcID@areaID" keys) and holiday items change which items are holiday ones
+    local holiday = tostring(key):find("@", 1, true) or tostring(vendor.seedID or ""):find("@", 1, true)
+    for itemID in pairs(seen) do holiday = holiday or MM.holidayItems[itemID] end
+    if holiday then self:RefreshItemHolidays() end
     self:OnDataChanged()
     if wasClassic then self:PointToNextUnvisited() end
 end

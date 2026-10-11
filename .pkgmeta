@@ -1,4 +1,6 @@
 package-as: MerchantMap
+
+manual-changelog: CHANGELOG.md
 externals:
   Libs/LibStub:
     url: https://repos.curseforge.com/wow/libstub/trunk

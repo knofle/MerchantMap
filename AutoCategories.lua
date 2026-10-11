@@ -271,7 +271,7 @@ local function Process()
         ticker:Cancel()
         ticker, head, tail = nil, 1, 0
     end
-    if changed then MM:OnDataChanged() end
+    if changed then MM:OnCategoriesChanged() end
 end
 
 function MM:QueueAutoCategorize(itemID)
