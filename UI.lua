@@ -287,7 +287,7 @@ hint:SetPoint("BOTTOMLEFT", 10, 8)
 hint:SetPoint("RIGHT", -22, 0)
 hint:SetJustifyH("LEFT")
 hint:SetWordWrap(false)
-hint:SetText("Click: show on map   Drag onto category: add   Right-click: remove   Shift-click: link")
+hint:SetText("Click: mark nearest   Drag onto category: add   Right-click: remove   Shift-click: link")
 
 -- Compact view controls: close and back to the full view, beside the search box
 local miniClose = CreateFrame("Button", nil, panel)
@@ -943,7 +943,6 @@ local function SelectCategory(path)
     category, selected, offset = path, nil, 0
     box:SetText("")
     MM:RefreshList()
-    MM:FitMapToActive()
 end
 
 local function Node_OnClick(self)
@@ -1254,7 +1253,6 @@ local function Row_OnClick(self, button)
             selected = nil
             MM:ClearMinimapVendor()
             MM:RefreshList()
-            MM:FitMapToActive()
             return
         else
             selected = itemID
@@ -1285,13 +1283,11 @@ local function Row_OnClick(self, button)
         selected = nil
         MM:ClearMinimapVendor()
         MM:RefreshList()
-        MM:FitMapToActive()
         return
     elseif selected == itemID then
         selected = nil
         MM:ClearMinimapVendor()
         MM:RefreshList()
-        MM:FitMapToActive()
         return
     else
         selected = itemID

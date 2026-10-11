@@ -351,13 +351,9 @@ local function TargetButton()
         if opts.onClick then
             opts.onClick(self.owner, button)
         elseif button == "RightButton" then
-            -- Right-click clears the minimap marker; elsewhere it zooms the map out as usual
-            if self.owner.key == MM.minimapKey then
-                if self.rightMacro then lastMarked = nil end
-                MM:ClearMinimapVendor()
-            else
-                WorldMapFrame:NavigateToParentMap()
-            end
+            -- Only the marked pin takes right-click (to clear the marker); others pass it to the map
+            if self.rightMacro then lastMarked = nil end
+            MM:ClearMinimapVendor()
         elseif PinAction(self.owner) then
             -- Step aside after shift/alt actions; the frame underneath re-attaches on hover
             self:Hide()
@@ -433,11 +429,14 @@ local function AttachTargetButton(owner, opts)
     b.targetName = name or nil
     b.unmarkName = opts.unmarkName
     AimButton(b)
-    -- Map pins leave right-click to the map, which zooms out with it
+    -- Without rightClick, right-click passes through to what's underneath. On a map pin that reaches
+    -- the map's own zoom-out, since zooming it from addon code would taint it.
     if opts.rightClick then
         b:RegisterForClicks("LeftButtonUp", "LeftButtonDown", "RightButtonUp", "RightButtonDown")
+        b:SetPassThroughButtons()
     else
         b:RegisterForClicks("LeftButtonUp", "LeftButtonDown")
+        b:SetPassThroughButtons("RightButton")
     end
     if opts.onDragStart then b:RegisterForDrag("LeftButton") else b:RegisterForDrag() end
     PlaceTargetButton(owner)
@@ -559,6 +558,11 @@ local function PinAlpha(pin)
     return PIN_STYLES[pin.state].alpha
 end
 
+-- Blizzard's pin code sets each pin's click-through when it's added, and that call is blocked in combat.
+-- Ours does nothing so pins can be added in combat; OnAcquired sets it for real while out of combat.
+local SetPassThrough = CreateFrame("Button").SetPassThroughButtons
+function MerchantMapPinMixin:SetPassThroughButtons() end
+
 function MerchantMapPinMixin:OnAcquired(key, vendor, state, x, y)
     self.key, self.vendor, self.state, self.baseLevel = key, vendor, state, nil
     -- Services show their own icon (trainer, flight master...), vendors the coin
@@ -569,6 +573,11 @@ function MerchantMapPinMixin:OnAcquired(key, vendor, state, x, y)
     self.Hover:Hide()
     self.Marked:SetShown(key == MM.minimapKey)
     self:SetPosition(x, y)
+    -- Right-click passes to the map (zoom out), except on the marked pin. Pins added in combat keep
+    -- what they had until the refresh after combat.
+    if not InCombatLockdown() then
+        if key == MM.minimapKey then SetPassThrough(self) else SetPassThrough(self, "RightButton") end
+    end
 end
 
 -- Hover tracker: among the pins under the cursor, the one whose center is closest wins, -------
@@ -626,7 +635,7 @@ end
 local function AttachPinTargeting(pin)
     if pin.stacked == 1 and not WaypointWanted(pin) then
         AttachTargetButton(pin, {
-            rightClick = true,
+            rightClick = pin.key == MM.minimapKey,
             unmarkName = pin.key == MM.minimapKey and MM:TargetName(pin.vendor) or nil,
         })
     else
@@ -818,11 +827,9 @@ function Provider:OnMapChanged()
     MapCanvasDataProviderMixin.OnMapChanged(self)
 end
 
--- No pins in combat: adding them touches protected map functions, which the game blocks then
 function Provider:RefreshAllData()
     SetHovered(nil)
     self:RemoveAllData()
-    if InCombatLockdown() then return end
     local map = self:GetMap()
     local mapID = map:GetMapID()
 
@@ -862,9 +869,8 @@ else
     EventUtil.ContinueOnAddOnLoaded("Blizzard_WorldMap", Attach)
 end
 
--- Pins come off the map when combat starts and back when it ends
+-- Pins added in combat get their click-through once it ends
 local combatEvents = CreateFrame("Frame")
-combatEvents:RegisterEvent("PLAYER_REGEN_DISABLED")
 combatEvents:RegisterEvent("PLAYER_REGEN_ENABLED")
 combatEvents:SetScript("OnEvent", function() MM:RefreshMap() end)
 
@@ -1040,33 +1046,6 @@ function MM:SetWaypoint(vendor, name)
     end
 end
 
--- Map IDs from the root down to mapID
-local function MapChain(mapID)
-    local chain, info = {}, C_Map.GetMapInfo(mapID)
-    while info do
-        table.insert(chain, 1, info.mapID)
-        if not info.parentMapID or info.parentMapID == 0 then break end
-        info = C_Map.GetMapInfo(info.parentMapID)
-    end
-    return chain
-end
-
--- Smallest map containing all the given maps: a zone, a continent, or the world
-local function CommonMap(maps)
-    local common
-    for mapID in pairs(maps) do
-        local chain = MapChain(mapID)
-        if not common then
-            common = chain
-        else
-            local depth = 0
-            while common[depth + 1] and common[depth + 1] == chain[depth + 1] do depth = depth + 1 end
-            for i = #common, depth + 1, -1 do common[i] = nil end
-        end
-    end
-    return common and common[#common]
-end
-
 -- Closest of the keys (NPC key -> value) on your continent. skip(value) leaves some out.
 local function ClosestNPC(keys, skip)
     local playerMap = C_Map.GetBestMapForUnit("player")
@@ -1136,128 +1115,40 @@ function MM:PointToNextUnvisited()
     end
 end
 
--- Opens your zone if a vendor there sells the item, otherwise the smallest map showing all its vendors.
--- The closest vendor on your continent also goes on the minimap.
--- If the click managed to target the closest vendor, it's right there, so the map stays closed.
--- The target check waits a moment for the targeting macro to take effect.
-local function OpenMapAt(mapID)
-    if WorldMapFrame:IsShown() then
-        WorldMapFrame:SetMapID(mapID)
-    elseif not MM.db.noAutoMap and not InCombatLockdown() then
-        if OpenWorldMap then
-            OpenWorldMap(mapID)
-        else
-            ShowUIPanel(WorldMapFrame)
-            WorldMapFrame:SetMapID(mapID)
-        end
-    end
-end
-
--- True if the click's targeting found this NPC; an open map then just shows your zone
-local function TargetIsHere(name)
-    local target = UnitExists("target") and UnitName("target")
-    if not (name and target and not (issecretvalue and issecretvalue(target)) and target == name) then
-        return false
-    end
-    local zone = WorldMapFrame:IsShown() and C_Map.GetBestMapForUnit("player")
-    zone = zone and Ancestor(zone, Enum.UIMapType.Zone)
-    if zone then WorldMapFrame:SetMapID(zone) end
-    return true
-end
-
--- Same as items: minimap marker, target and skull, and the map on their zone unless they're right here
+-- Clicking an item or NPC marks the closest one: minimap marker, arrow, waypoint and target.
+-- The world map is never opened or moved from here: changing its zone from addon code taints its
+-- scroll state for the rest of the session, which blocks Blizzard's quest pins when it's opened in combat.
 function MM:ShowServiceOnMap(key)
     local npc = self.services and self.services[key]
-    if not npc then return end
-    self:SetMinimapVendor(npc, key)
-    C_Timer.After(0.1, function()
-        if TargetIsHere(npc.name) then return end
-        local zone = Ancestor(npc.mapID, Enum.UIMapType.Zone)
-        if zone then OpenMapAt(zone) end
-    end)
+    if npc then self:SetMinimapVendor(npc, key) end
 end
 
 function MM:ShowItemOnMap(itemID)
     local item = self.db.items[itemID]
     if not item then return end
-
-    local closest = ClosestVendor(item)
-    local name = closest and self.db.vendors[closest].name
     -- A new item replaces the old marker, or clears it when nobody on this continent sells it
+    local closest = ClosestVendor(item)
     if closest then
         local offer = item.vendors[closest]
         self:SetMinimapVendor(self.db.vendors[closest], closest, item.name, offer.limited and not offer.notSeen)
     else
         self:ClearMinimapVendor()
     end
-
-    C_Timer.After(0.1, function()
-        -- Vendor is right here: leave a closed map closed, show an open one on your zone
-        if TargetIsHere(name) then return end
-        MM:OpenMapForItem(itemID)
-    end)
 end
 
 -- Closest vendor selling any of the items, shown like a single item's
 function MM:ShowVendorForItems(itemIDs, label)
     local key, offer = self:ClosestVendorFor(itemIDs)
     if not key then return self:ClearMinimapVendor() end
-    local vendor = self.db.vendors[key]
-    self:SetMinimapVendor(vendor, key, label, offer.limited and not offer.notSeen)
-    C_Timer.After(0.1, function()
-        if TargetIsHere(vendor.name) then return end
-        local zone = Ancestor(vendor.mapID, Enum.UIMapType.Zone)
-        if zone then OpenMapAt(zone) end
-    end)
+    self:SetMinimapVendor(self.db.vendors[key], key, label, offer.limited and not offer.notSeen)
 end
 
--- Your zone if one of the NPCs is there, otherwise the smallest map showing them all
-local function OpenMapForNPCs(keys)
-    local playerMap = C_Map.GetBestMapForUnit("player")
-    local playerZone = playerMap and Ancestor(playerMap, Enum.UIMapType.Zone)
-    local zones = {}
-    for key in pairs(keys) do
-        local npc = MM:GetNPC(key)
-        local shown = MM.db.showHidden or not MM.db.hiddenVendors[key]
-        if shown and npc and npc.mapID then
-            local zone = Ancestor(npc.mapID, Enum.UIMapType.Zone)
-            if zone then zones[zone] = true end
-        end
-    end
-    if not next(zones) then return end
-
-    OpenMapAt((playerZone and zones[playerZone]) and playerZone or CommonMap(zones) or next(zones))
-end
-
-function MM:OpenMapForItem(itemID)
-    local item = self.db.items[itemID]
-    if item then OpenMapForNPCs(item.vendors) end
-end
-
--- A set of service NPCs, like an item's vendors: closest on the minimap, map showing them all
+-- A set of service NPCs, like an item's vendors: the closest gets the marker
 function MM:ShowServicesOnMap(keys)
     local closest = ClosestNPC(keys)
-    local name = closest and self.services[closest].name
     if closest then
         self:SetMinimapVendor(self.services[closest], closest)
     else
         self:ClearMinimapVendor()
     end
-    C_Timer.After(0.1, function()
-        if TargetIsHere(name) then return end
-        OpenMapForNPCs(keys)
-    end)
-end
-
--- When the map is already open, shows the smallest map holding every pinned vendor
-function MM:FitMapToActive()
-    if not (WorldMapFrame:IsShown() and self.activeVendors) then return end
-    local zones = {}
-    for key in pairs(self.activeVendors) do
-        local npc = self:GetNPC(key)
-        local zone = npc and npc.mapID and Ancestor(npc.mapID, Enum.UIMapType.Zone)
-        if zone and (self.db.showHidden or not self.db.hiddenVendors[key]) then zones[zone] = true end
-    end
-    local mapID = CommonMap(zones)
-    if mapID then WorldMapFrame:SetMapID(mapID) end
 end

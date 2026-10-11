@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Map pins now stay on the world map during combat instead of disappearing until it ends.
+
+- Fixed "AddOn 'MerchantMap' tried to call the protected function" errors when opening the world map in combat. Clicking an item or NPC no longer opens or moves the world map (that's what caused them), so the "Open the map" option is gone. The vendor still gets the minimap marker, arrow, target marker and optional waypoint, and their pins show when you open the map.
+
 - Removed the MM button on the world map, along with its option to show every vendor. Search still pins the vendors you're looking for.
 - "Show hidden vendors" is now a checkbox in the options (under Map). With it on, vendors you hid show in grey and alt-click brings them back.
 

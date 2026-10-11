@@ -270,10 +270,6 @@ end
 local clickTop = Columns()
 Section("When clicking an item or NPC in the list")
 
-Check("Open the map", "",
-    function() return not MM.db.noAutoMap end,
-    function(on) MM.db.noAutoMap = not on or nil end)
-
 Check("Set minimap marker", "When on this continent",
     function() return not MM.db.noMinimapPin end,
     function(on) MM:SetMinimapPinShown(on) end)
