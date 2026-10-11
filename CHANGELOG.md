@@ -1,6 +1,6 @@
 # Merchant Map
 
-## Unreleased
+## 1.1.5
 
 - Map pins now stay on the world map during combat instead of disappearing until it ends.
 
