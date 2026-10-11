@@ -851,183 +851,9 @@ function Provider:RefreshAllData()
     tracker:Show()
 end
 
--- Map menu: one "Merchant Map" button with the layer toggles and a shortcut to the window --------
-
-
-local OPTIONS = {
-    { text = "Open Merchant Map", note = "Search and browse everything you've recorded.",
-      action = function() MM:Toggle() end },
-    { text = "Vendors", setting = "showAllVendors", color = { 1, 0.82, 0 },
-      note = "Show every vendor. While searching in the Merchant Map window, only matching vendors are shown." },
-    { text = "Show hidden", setting = "showHidden", color = { 0.75, 0.75, 0.75 },
-      note = "Grey pins are vendors you've hidden. Alt-click a pin to hide or enable it." },
-}
-
-local MENU_W, OPTION_H = 190, 24
-
-local function CreateMenuRow(menu, option, y)
-    local row = CreateFrame("Button", nil, menu)
-    row:SetSize(MENU_W - 8, OPTION_H)
-    row:SetPoint("TOPLEFT", 4, y)
-    local hl = row:CreateTexture()
-    hl:SetColorTexture(1, 1, 1, 0.07)
-    row:SetHighlightTexture(hl)
-
-    local label = row:CreateFontString(nil, "OVERLAY", "MM_GameFontHighlightSmall")
-    label:SetPoint("LEFT", 26, 0)
-    label:SetText(option.text)
-
-    if option.setting then
-        -- Custom checkbox: bordered square, filled with the layer color when on
-        local box = row:CreateTexture(nil, "BORDER")
-        box:SetSize(12, 12)
-        box:SetPoint("LEFT", 8, 0)
-        box:SetColorTexture(BORDER[1], BORDER[2], BORDER[3], 1)
-        local inner = row:CreateTexture(nil, "ARTWORK")
-        inner:SetPoint("TOPLEFT", box, 1, -1)
-        inner:SetPoint("BOTTOMRIGHT", box, -1, 1)
-        inner:SetColorTexture(0.03, 0.03, 0.04, 1)
-        local fill = row:CreateTexture(nil, "OVERLAY")
-        fill:SetPoint("TOPLEFT", box, 3, -3)
-        fill:SetPoint("BOTTOMRIGHT", box, -3, 3)
-        fill:SetColorTexture(option.color[1], option.color[2], option.color[3])
-
-        function row:Update()
-            local on = MM.db[option.setting]
-            fill:SetShown(on)
-            if on then
-                label:SetTextColor(option.color[1], option.color[2], option.color[3])
-            else
-                label:SetTextColor(0.6, 0.6, 0.6)
-            end
-        end
-        row:SetScript("OnClick", function(self)
-            MM.db[option.setting] = not MM.db[option.setting] or nil
-            self:Update()
-            MM:RefreshMap()
-        end)
-    else
-        local icon = row:CreateTexture(nil, "ARTWORK")
-        icon:SetSize(14, 14)
-        icon:SetPoint("LEFT", 7, 0)
-        icon:SetTexture(COIN)
-        label:SetTextColor(1, 1, 1)
-        row:SetScript("OnClick", function()
-            menu:Hide()
-            option.action()
-        end)
-    end
-
-    row:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        GameTooltip:SetText(option.text, 1, 1, 1)
-        GameTooltip:AddLine(option.note, 0.8, 0.8, 0.8, true)
-        GameTooltip:Show()
-    end)
-    row:SetScript("OnLeave", GameTooltip_Hide)
-    return row
-end
-
-local function MenuLine(menu, y)
-    local line = menu:CreateTexture(nil, "ARTWORK")
-    line:SetColorTexture(BORDER[1], BORDER[2], BORDER[3], 1)
-    line:SetHeight(1)
-    line:SetPoint("TOPLEFT", 8, y - 3)
-    line:SetPoint("TOPRIGHT", -8, y - 3)
-    return y - 7
-end
-
-local mapButton, mapMenu
-
--- Option: the MM button on the world map can be turned off
-function MM:SetMapButtonShown(show)
-    self.db.noMapButton = not show or nil
-    if mapButton then mapButton:SetShown(show) end
-end
-
--- Option: which corner of the map it sits in, 40 from the top or bottom edge and 4 from the side.
--- Its menu opens toward the middle of the map.
-local function PlaceMapButton()
-    if not mapButton then return end
-    local corner = MM.db and MM.db.mapButtonCorner or "TOPRIGHT"
-    local top, left = corner:find("^TOP") ~= nil, corner:find("LEFT$") ~= nil
-    local side = left and "LEFT" or "RIGHT"
-    local container = WorldMapFrame.ScrollContainer or WorldMapFrame
-    mapButton:ClearAllPoints()
-    mapButton:SetPoint(corner, container, corner, left and 4 or -4, top and -40 or 40)
-    mapMenu:ClearAllPoints()
-    if top then
-        mapMenu:SetPoint("TOP" .. side, mapButton, "BOTTOM" .. side, 0, -3)
-    else
-        mapMenu:SetPoint("BOTTOM" .. side, mapButton, "TOP" .. side, 0, 3)
-    end
-end
-
-function MM:SetMapButtonCorner(corner)
-    self.db.mapButtonCorner = corner ~= "TOPRIGHT" and corner or nil
-    PlaceMapButton()
-end
-
-local function CreateMapMenu()
-    local container = WorldMapFrame.ScrollContainer or WorldMapFrame
-
-    -- Top right corner of the map
-    local button = CreateFrame("Button", nil, WorldMapFrame)
-    mapButton = button
-    -- The map can load before saved settings do; login applies the option then
-    button:SetShown(not (MM.db and MM.db.noMapButton))
-    button:SetSize(42, 22)
-    button:SetFrameLevel(container:GetFrameLevel() + 20)
-    SolidBox(button, 0.9)
-    local hl = button:CreateTexture()
-    hl:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.12)
-    button:SetHighlightTexture(hl)
-    local icon = button:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(12, 12)
-    icon:SetPoint("LEFT", 7, 0)
-    icon:SetTexture(COIN)
-    local label = button:CreateFontString(nil, "OVERLAY", "MM_GameFontNormalSmall")
-    label:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
-    label:SetPoint("LEFT", icon, "RIGHT", 5, 0)
-    label:SetText("MM")
-
-    local menu = CreateFrame("Frame", nil, button)
-    menu:SetFrameStrata("FULLSCREEN_DIALOG")
-    menu:SetWidth(MENU_W)
-    mapMenu = menu
-    PlaceMapButton()
-    menu:EnableMouse(true)
-    menu:Hide()
-    SolidBox(menu, 0.95)
-
-    local rows, y = {}, -4
-    for i, option in ipairs(OPTIONS) do
-        rows[i] = CreateMenuRow(menu, option, y)
-        y = y - OPTION_H
-        if i == 1 then y = MenuLine(menu, y) end
-    end
-    menu:SetHeight(-y + 4)
-
-    -- Stays open while toggling; closes on a click anywhere else
-    menu:SetScript("OnShow", function(self)
-        for _, row in ipairs(rows) do
-            if row.Update then row:Update() end
-        end
-        self:RegisterEvent("GLOBAL_MOUSE_DOWN")
-    end)
-    menu:SetScript("OnHide", function(self)
-        self:UnregisterEvent("GLOBAL_MOUSE_DOWN")
-    end)
-    menu:SetScript("OnEvent", function(self)
-        if not self:IsMouseOver() and not button:IsMouseOver() then self:Hide() end
-    end)
-    button:SetScript("OnClick", function() menu:SetShown(not menu:IsShown()) end)
-end
-
 local function Attach()
     WorldMapFrame:AddDataProvider(Provider)
     WorldMapFrame:HookScript("OnHide", function() SetHovered(nil) end)
-    CreateMapMenu()
 end
 
 if WorldMapFrame then
@@ -1042,12 +868,10 @@ combatEvents:RegisterEvent("PLAYER_REGEN_DISABLED")
 combatEvents:RegisterEvent("PLAYER_REGEN_ENABLED")
 combatEvents:SetScript("OnEvent", function() MM:RefreshMap() end)
 
+-- Showing every vendor has no toggle for now (the world map button is gone), so nobody is left with it stuck on
 local loginEvents = CreateFrame("Frame")
 loginEvents:RegisterEvent("PLAYER_LOGIN")
-loginEvents:SetScript("OnEvent", function()
-    if mapButton then mapButton:SetShown(not MM.db.noMapButton) end
-    PlaceMapButton()
-end)
+loginEvents:SetScript("OnEvent", function() MM.db.showAllVendors = nil end)
 
 -- API used by the UI ------------------------------------------------------------
 

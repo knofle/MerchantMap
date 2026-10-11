@@ -130,9 +130,15 @@ local function StopMoving()
     frame:StopMovingOrSizing()
     local point, _, relPoint, x, y = frame:GetPoint()
     MM.db.arrowPoint = { point, relPoint, x, y }
+    -- The targeting button laid over the arrow may not have heard the drag end either
+    MM:EndTargetDrag()
 end
 frame:SetScript("OnDragStart", StartMoving)
 frame:SetScript("OnDragStop", StopMoving)
+-- Other buttons held or a quick move can swallow the drag's end, so the release itself also ends it
+frame:HookScript("OnUpdate", function()
+    if moving and not IsMouseButtonDown("LeftButton") then StopMoving() end
+end)
 
 -- Left-click targets and marks the NPC (through the targeting button), right-click clears the marker
 local function OnClick(_, button)

@@ -13,7 +13,7 @@ Vendors and service NPCs come from Classic data. Open a vendor's shop and Mercha
 Open the window with |cffffffff/mm|r or the minimap button, or search straight from chat with |cffffffff/mm hunter trainer|r. Search by name, category or shorthand ("tailoring mats", "lw recipes"), by level ("food 10-20", "45", "over 30"), add "usable" for only what you can use ("usable gear 20-30"), or search for services ("hunter trainer", "repair"). Drag items onto categories to sort them, right-click to remove them.
 
 |cffccb084Finding a vendor|r
-Click an item to target the closest vendor and put a raid marker on them, show them on the minimap and point the arrow at them. Shift-click a vendor on the map for their full inventory, alt-click a pin to hide it. The MM button on the world map picks which pins show.
+Click an item to target the closest vendor and put a raid marker on them, show them on the minimap and point the arrow at them. Shift-click a vendor on the map for their full inventory, alt-click a pin to hide it. Turn on "Show hidden vendors" to see hidden ones in grey and alt-click them to enable them again.
 
 |cffccb084Commands|r
 |cffffffff/mm|r  |cffffffff/mm <search>|r  |cffffffff/mm options|r  |cffffffff/mm arrow|r  |cffffffff/mm share|r  |cffffffff/mm auto|r  |cffffffff/mm minimap|r]]
@@ -374,16 +374,15 @@ Check("Minimap button", "Opens Merchant Map",
     function() return not (MM.db.minimapButton and MM.db.minimapButton.hide) end,
     function(on) MM:SetMinimapButtonShown(on) end)
 
-local mapButtonCheck = Check("World map button", "",
-    function() return not MM.db.noMapButton end,
-    function(on) MM:SetMapButtonShown(on) end)
-mapButtonCheck:SetWidth(140)
+Section("Map")
 
-local UpdateMapButtonDropdown = Dropdown(mapButtonCheck.label, {
-    { "TOPLEFT", "Top left" }, { "TOPRIGHT", "Top right" },
-    { "BOTTOMLEFT", "Bottom left" }, { "BOTTOMRIGHT", "Bottom right" },
-}, function() return MM.db.mapButtonCorner or "TOPRIGHT" end,
-   function(value) MM:SetMapButtonCorner(value) end)
+-- Hidden vendors show grey while this is on, so alt-clicking can bring them back
+Check("Show hidden vendors", "Grey pins, alt-click to enable",
+    function() return MM.db.showHidden end,
+    function(on)
+        MM.db.showHidden = on or nil
+        MM:RefreshMap()
+    end)
 
 EndColumns(clickTop, clickBottom)
 
@@ -461,7 +460,6 @@ page:SetScript("OnShow", function()
     for _, row in ipairs(checks) do row:Update() end
     UpdateDropdown()
     UpdateTooltipDropdown()
-    UpdateMapButtonDropdown()
     scaleSlider:SetValue(MM.db.windowScale or 1)
     slider:SetValue(MM.db.arrowScale or 1)
 end)
