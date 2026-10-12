@@ -1,5 +1,12 @@
 # Merchant Map
 
+## Unreleased
+
+- Pinned vendors just across a zone border now show on the map of the zone you're looking at, wherever they fall inside it.
+
+- Updated to Questie's latest data (QuestieDB 1.0.6): 4 more vendors, 130 more trainers and other service NPCs, and 15 more mailboxes.
+- Brought back seven NPCs that had gone missing from search: the transmogrifier Mon'ye, the battlemasters Borook Gallfist and Gruga Bloodblade, and the demon trainers Hraug, Kitha, Gina Lang and Kurgul.
+
 ## 1.1.5
 
 - Map pins now stay on the world map during combat instead of disappearing until it ends.

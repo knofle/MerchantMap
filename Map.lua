@@ -827,6 +827,17 @@ function Provider:OnMapChanged()
     MapCanvasDataProviderMixin.OnMapChanged(self)
 end
 
+-- A vendor in another zone of the same continent whose spot still falls inside this map,
+-- since zone maps overlap at their borders. Farther ones aren't shown.
+local function NearbyPos(vendor, mapID)
+    local continent = Ancestor(mapID, Enum.UIMapType.Continent)
+    if not continent or continent == mapID then return end
+    local cx, cy = PosOnMap(vendor, continent)
+    local rect = MapRect(mapID, continent)
+    if not (cx and rect and rect[2] > 0 and rect[4] > 0) then return end
+    return (cx - rect[1]) / rect[2], (cy - rect[3]) / rect[4]
+end
+
 function Provider:RefreshAllData()
     SetHovered(nil)
     self:RemoveAllData()
@@ -838,6 +849,7 @@ function Provider:RefreshAllData()
         local vendor = MM:GetNPC(key)
         local x, y
         if vendor then x, y = PosOnMap(vendor, mapID) end
+        if not x and vendor then x, y = NearbyPos(vendor, mapID) end
         if x and x >= 0 and x <= 1 and y >= 0 and y <= 1 then
             map:AcquirePin(PIN, key, vendor, PinState(key, vendor), x, y)
         end
