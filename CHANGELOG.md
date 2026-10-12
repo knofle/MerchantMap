@@ -1,6 +1,6 @@
 # Merchant Map
 
-## Unreleased
+## 1.1.6
 
 - Pinned vendors just across a zone border now show on the map of the zone you're looking at, wherever they fall inside it.
 
