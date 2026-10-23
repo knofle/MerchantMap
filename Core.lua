@@ -15,6 +15,7 @@ MM.COLORS = {
     inset = { 0.065, 0.06, 0.055 },  -- list and tree wells
     button = { 0.17, 0.15, 0.125 },
     buttonTop = { 0.235, 0.205, 0.17 },
+    fresh = { 0.40, 0.65, 0.95 },    -- soft blue: items and categories you haven't seen since a change
 }
 -- Tiled grain laid over flat backgrounds
 MM.GRAIN = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark"
@@ -313,6 +314,29 @@ end
 function MM:ZoneName(vendor)
     local info = vendor.mapID and C_Map.GetMapInfo(vendor.mapID)
     return info and info.name or "Unknown"
+end
+
+-- Clickable chat links like [Undo] and [Confirm], in the soft blue of fresh changes.
+-- Uses the "addon" link type, which the chat ignores; clicks reach the handler registered for kind.
+local linkHandlers = {}
+
+function MM:ChatLink(kind, arg, label)
+    return ("|cff66a6f2|Haddon:MerchantMap:%s:%s|h[%s]|h|r"):format(kind, tostring(arg), label)
+end
+
+function MM:OnChatLink(kind, handler)
+    linkHandlers[kind] = handler
+end
+
+hooksecurefunc("SetItemRef", function(link)
+    local kind, arg = tostring(link):match("^addon:MerchantMap:(%a+):(.*)$")
+    if kind and linkHandlers[kind] then linkHandlers[kind](arg) end
+end)
+
+-- Starts over with no saved data at all; the reload brings back the Classic and shipped data
+function MM:ResetEverything()
+    MerchantMapDB = {}
+    ReloadUI()
 end
 
 -- Events ------------------------------------------------------------------

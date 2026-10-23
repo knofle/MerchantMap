@@ -98,6 +98,17 @@ function MM:InitCategories()
     end
 end
 
+-- Back to the default categories: your own categories and sorting go, and every item is sorted again
+function MM:ResetCategories()
+    local db = self.db
+    db.categories, db.userCategories = nil, nil
+    db.itemCats, db.collapsed, db.autoDone, db.overridden = {}, {}, {}, {}
+    self:InitCategories()
+    for itemID in pairs(db.items) do self:QueueAutoCategorize(itemID) end
+    self:ResetFreshMarks()
+    self:OnDataChanged()
+end
+
 -- A category made with the New button, along with any parents it needed
 function MM:AddUserCategory(text)
     local path = self:NormalizePath(text)

@@ -16,7 +16,7 @@ Open the window with |cffffffff/mm|r or the minimap button, or search straight f
 Click an item to target the closest vendor and put a raid marker on them, show them on the minimap and point the arrow at them. Shift-click a vendor on the map for their full inventory, alt-click a pin to hide it. Turn on "Show hidden vendors" to see hidden ones in grey and alt-click them to enable them again.
 
 |cffccb084Commands|r
-|cffffffff/mm|r  |cffffffff/mm <search>|r  |cffffffff/mm options|r  |cffffffff/mm arrow|r  |cffffffff/mm share|r  |cffffffff/mm auto|r  |cffffffff/mm minimap|r]]
+|cffffffff/mm|r  |cffffffff/mm <search>|r  |cffffffff/mm options|r  |cffffffff/mm arrow|r  |cffffffff/mm share|r  |cffffffff/mm auto|r  |cffffffff/mm minimap|r  |cffffffff/mm reset categories|r  |cffffffff/mm reset all|r]]
 
 -- The page scrolls: everything is laid out on its content frame, panel
 local page = CreateFrame("Frame")
@@ -429,6 +429,40 @@ y = y - 30
 local shareNote = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
 shareNote:SetPoint("LEFT", share, "RIGHT", 10, 0)
 shareNote:SetText("Export what you've recorded, or import someone else's")
+
+------------------------------------------------------------------------------------------------
+Section("Reset")
+
+-- Asks for a second click within a few seconds before it does anything
+local function ResetButton(text, note, run)
+    local b = Button(text, 170)
+    b:SetPoint("TOPLEFT", 24, y)
+    y = y - 30
+    local hint = panel:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
+    hint:SetPoint("LEFT", b, "RIGHT", 10, 0)
+    hint:SetText(note)
+    local armed
+    b:SetScript("OnClick", function()
+        if armed then
+            armed:Cancel()
+            armed = nil
+            b:SetText(text)
+            run()
+            return
+        end
+        b:SetText("|cffff5a4dClick again to confirm|r")
+        armed = C_Timer.NewTimer(4, function()
+            armed = nil
+            b:SetText(text)
+        end)
+    end)
+end
+
+ResetButton("Reset categories", "Your own categories and sorting go, every item is sorted again", function()
+    MM:ResetCategories()
+    print("|cffccb084Merchant Map:|r categories reset to the defaults.")
+end)
+ResetButton("Reset everything", "Wipes all saved data and settings, then reloads", function() MM:ResetEverything() end)
 
 ------------------------------------------------------------------------------------------------
 Section("How it works")

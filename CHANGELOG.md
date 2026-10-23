@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Clicking an item now shows where it lives: its categories glow faintly blue in the tree (or the folded category they're in, or Uncategorized).
+
+- Adding an item to a category (drag and drop) or removing it (right-click) now says in chat where the item is now, with a clickable [Undo].
+- Items you drop on a category, or that land somewhere after a remove, are marked in soft blue until you've seen them there, and that category glows blue in the tree (also on a folded parent) until then.
+- New reset options, with buttons on the options page: /mm reset categories puts the categories back to the defaults and sorts every item again, /mm reset all wipes all saved data and settings.
+
 - Pinned vendors just across a zone border now show on the map of the zone you're looking at, wherever they fall inside it.
 
 - Updated to Questie's latest data (QuestieDB 1.0.6): 4 more vendors, 130 more trainers and other service NPCs, and 15 more mailboxes.

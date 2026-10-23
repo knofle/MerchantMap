@@ -593,6 +593,216 @@ local function CountItems()
     end
 end
 
+-- "New here" marks ----------------------------------------------------------
+-- An item dropped on a category, or left in its other categories (or Uncategorized) after a remove,
+-- is marked there and the category glows, until you've seen it in that category. This session only.
+
+local Fresh = { paths = {}, seen = {}, pulse = {}, pulseItems = {} }
+
+-- path is root or one of its subcategories; Uncategorized has none
+function Fresh.Under(path, root)
+    return path == root or (root ~= UNCAT and path:sub(1, #root + 1) == root .. "/")
+end
+
+function Fresh.Mark(itemID, path)
+    Fresh.paths[path] = Fresh.paths[path] or {}
+    Fresh.paths[path][itemID] = true
+    Fresh.pulse[path], Fresh.pulseItems[itemID] = true, true
+end
+
+-- Drops the item's marks in root and below, once it's no longer there
+function Fresh.Unmark(itemID, root)
+    for path, items in pairs(Fresh.paths) do
+        if Fresh.Under(path, root) then
+            items[itemID] = nil
+            if not next(items) then Fresh.paths[path] = nil end
+        end
+    end
+end
+
+-- The marked path the category being viewed shows the item for. All items doesn't count as seeing it.
+function Fresh.ItemPath(itemID, cat)
+    if cat == ALL then return end
+    for path, items in pairs(Fresh.paths) do
+        if items[itemID] and Fresh.Under(path, cat) then return path end
+    end
+end
+
+-- Whether a tree node glows (marked itself, or folded over marked ones), and whether to pulse it now
+function Fresh.Node(path, folded)
+    local found, pulse = false, false
+    for p in pairs(Fresh.paths) do
+        if p == path or (folded and (path == ALL or Fresh.Under(p, path))) then
+            found = true
+            if Fresh.pulse[p] then Fresh.pulse[p], pulse = nil, true end
+        end
+    end
+    return found, pulse
+end
+
+-- Marks shown in the list count as seen once you move on to another category or close the window
+function Fresh.Seen(itemID, path)
+    Fresh.seen[path] = Fresh.seen[path] or {}
+    Fresh.seen[path][itemID] = true
+end
+
+function Fresh.Forget()
+    for path, items in pairs(Fresh.seen) do
+        local marked = Fresh.paths[path]
+        if marked then
+            for itemID in pairs(items) do marked[itemID] = nil end
+            if not next(marked) then Fresh.paths[path] = nil end
+        end
+    end
+    wipe(Fresh.seen)
+end
+
+-- Soft blue fill with a thin glowing edge, set apart from the sand selection. Pulses a few times, then stays.
+-- strength is its resting alpha, 0.6 unless given.
+local function FreshGlow(row, strength)
+    local blue, base = C.fresh, strength or 0.6
+    local fill = row:CreateTexture(nil, "BACKGROUND", nil, 2)
+    fill:SetAllPoints()
+    fill:SetColorTexture(blue[1], blue[2], blue[3], 0.22)
+    local parts = { fill }
+    for _, side in ipairs({ "TOP", "BOTTOM", "LEFT", "RIGHT" }) do
+        local edge = row:CreateTexture(nil, "ARTWORK")
+        edge:SetColorTexture(blue[1], blue[2], blue[3], 0.75)
+        if side == "TOP" or side == "BOTTOM" then
+            edge:SetPoint(side .. "LEFT")
+            edge:SetPoint(side .. "RIGHT")
+            edge:SetHeight(1)
+        else
+            edge:SetPoint("TOP" .. side)
+            edge:SetPoint("BOTTOM" .. side)
+            edge:SetWidth(1)
+        end
+        parts[#parts + 1] = edge
+    end
+    for _, part in ipairs(parts) do
+        part:SetAlpha(base)
+        part:Hide()
+        part.anim = part:CreateAnimationGroup()
+        local fade = part.anim:CreateAnimation("Alpha")
+        fade:SetFromAlpha(base)
+        fade:SetToAlpha(1)
+        fade:SetDuration(0.35)
+        fade:SetSmoothing("IN_OUT")
+        part.anim:SetLooping("BOUNCE")
+        -- Three pulses (each one there and back), then steady
+        part.anim:SetScript("OnPlay", function(self) self.loops = 0 end)
+        part.anim:SetScript("OnLoop", function(self)
+            self.loops = self.loops + 1
+            if self.loops >= 6 then self:Stop() end
+        end)
+    end
+    local glow = {}
+    function glow:SetShown(on)
+        for _, part in ipairs(parts) do
+            part:SetShown(on)
+            if not on then part.anim:Stop() end
+        end
+    end
+    function glow:Pulse()
+        for _, part in ipairs(parts) do part.anim:Play() end
+    end
+    return glow
+end
+
+-- A category reset makes every mark stale
+function MM:ResetFreshMarks()
+    wipe(Fresh.paths)
+    wipe(Fresh.seen)
+    wipe(Fresh.pulse)
+    wipe(Fresh.pulseItems)
+end
+
+-- Category changes in chat ----------------------------------------------------
+-- Every drop or remove says where the item is now, with an [Undo] link. Undo puts the item's categories
+-- back as they were, as long as nothing has changed them since.
+
+local Changes = { list = {}, n = 0 }
+
+local function SameSet(a, b)
+    for k in pairs(a) do if not b[k] then return false end end
+    for k in pairs(b) do if not a[k] then return false end end
+    return true
+end
+
+function Changes.Snapshot(itemID)
+    local copy = {}
+    for path in pairs(MM.db.itemCats[itemID] or {}) do copy[path] = true end
+    return copy
+end
+
+-- Its categories and holidays, or Uncategorized
+function Changes.Where(itemID)
+    local now = SortedPaths(MM.db.itemCats[itemID] or {})
+    for holiday in pairs(MM:ItemHolidayPaths(itemID) or {}) do now[#now + 1] = "Holidays/" .. holiday end
+    if #now == 0 then now[1] = UNCAT end
+    return now
+end
+
+function Changes.Names(paths)
+    local names = {}
+    for i, path in ipairs(paths) do
+        names[i] = path == UNCAT and "Uncategorized" or (path:gsub("/", " > "))
+    end
+    return table.concat(names, ", ")
+end
+
+function Changes.ItemText(itemID)
+    local item = MM.db.items[itemID]
+    return item and (item.link or item.name) or "Item"
+end
+
+-- verb is "added to" or "removed from"; before is the item's categories before the change
+function Changes.Report(itemID, verb, path, before)
+    Changes.n = Changes.n + 1
+    Changes.list[Changes.n] = { itemID = itemID, before = before, after = Changes.Snapshot(itemID) }
+    print(("|cffccb084Merchant Map:|r %s %s %s. Now in %s. %s"):format(Changes.ItemText(itemID), verb,
+        path:match("[^/]+$"), Changes.Names(Changes.Where(itemID)), MM:ChatLink("undo", Changes.n, "Undo")))
+end
+
+MM:OnChatLink("undo", function(arg)
+    local id = tonumber(arg)
+    local change = id and Changes.list[id]
+    if not change then return end
+    local itemID = change.itemID
+    if not SameSet(Changes.Snapshot(itemID), change.after) then
+        print(("|cffccb084Merchant Map:|r %s has been moved again since, so that can't be undone."):format(Changes.ItemText(itemID)))
+        return
+    end
+    Changes.list[id] = nil
+    -- Marked where it goes back to, unmarked where it leaves
+    for path in pairs(change.after) do
+        if not change.before[path] then Fresh.Unmark(itemID, path) end
+    end
+    MM.db.itemCats[itemID] = next(change.before) and change.before or nil
+    if next(change.before) then Fresh.Unmark(itemID, UNCAT) end
+    for _, path in ipairs(Changes.Where(itemID)) do
+        if not change.after[path] then Fresh.Mark(itemID, path) end
+    end
+    countsDirty = true
+    MM:RefreshList()
+    print(("|cffccb084Merchant Map:|r Undone. %s is back in %s."):format(Changes.ItemText(itemID),
+        Changes.Names(Changes.Where(itemID))))
+end)
+
+-- Where the item you clicked lives: its categories and holidays (or Uncategorized), or the folded
+-- node hiding them, glow faintly in the tree
+local function HomeNode(path, folded)
+    if type(selected) ~= "number" or not MM.db.items[selected] then return false end
+    local homes = {}
+    for p in pairs(MM.db.itemCats[selected] or {}) do homes[#homes + 1] = p end
+    for holiday in pairs(MM:ItemHolidayPaths(selected) or {}) do homes[#homes + 1] = "Holidays/" .. holiday end
+    if #homes == 0 then homes[1] = UNCAT end
+    for _, p in ipairs(homes) do
+        if p == path or (folded and (path == ALL or Fresh.Under(p, path))) then return true end
+    end
+    return false
+end
+
 -- Drawing -----------------------------------------------------------------
 
 local function DrawTree()
@@ -608,6 +818,8 @@ local function DrawTree()
             row.label:SetText("")
             row.count:SetText("")
             row.sel:Hide()
+            row.glow:SetShown(false)
+            row.home:SetShown(false)
             row:Show()
         elseif node then
             row.path = node.path
@@ -624,6 +836,11 @@ local function DrawTree()
             end
             row.count:SetText(counts[node.path] or "")
             row.sel:SetShown(node.path == category)
+            local folded = node.kids and MM.db.collapsed[node.path]
+            local glows, pulse = Fresh.Node(node.path, folded)
+            row.glow:SetShown(glows)
+            if pulse then row.glow:Pulse() end
+            row.home:SetShown(not glows and HomeNode(node.path, folded))
             row:Show()
         else
             row.path = nil
@@ -642,11 +859,21 @@ local Row_Hover -- defined with the item rows below
 local function DrawRows()
     offset = math.max(0, math.min(offset, #results - ROWS))
     local soldKey = selected == nearestItems.id and nearestItems.key
+    local cat = ActiveCategory()
     for i, row in ipairs(rows) do
         local itemID = i <= ROWS and results[offset + i]
         local group = IsGroup(itemID)
         local npc = itemID and not group and IsService(itemID) and MM.services[itemID]
         local item = itemID and not npc and not group and MM.db.items[itemID]
+        local freshPath = item and Fresh.ItemPath(itemID, cat)
+        row.fresh:SetShown(freshPath and true or false)
+        if freshPath then
+            Fresh.Seen(itemID, freshPath)
+            if Fresh.pulseItems[itemID] then
+                Fresh.pulseItems[itemID] = nil
+                row.fresh:Pulse()
+            end
+        end
         if itemID == nearestItems.id then
             local vendor = nearestItems.key and MM.db.vendors[nearestItems.key]
             row.itemID = itemID
@@ -939,6 +1166,7 @@ local function ExpandTo(path)
 end
 
 local function SelectCategory(path)
+    Fresh.Forget()
     if path ~= category or selected then MM:ClearMinimapVendor() end
     category, selected, offset = path, nil, 0
     box:SetText("")
@@ -984,6 +1212,10 @@ local function CreateTreeRow(i)
     row.drop:Hide()
     Fill(row.drop, ACCENT, 0.25)
     Outline(row.drop, ACCENT)
+
+    row.glow = FreshGlow(row)
+    -- Fainter and steady: where the clicked item lives
+    row.home = FreshGlow(row, 0.3)
 
     row.toggle = CreateFrame("Button", nil, row)
     row.toggle:SetSize(16, ROW_H)
@@ -1219,9 +1451,16 @@ removeBtn.label:SetPoint("CENTER")
 
 removeBtn:SetScript("OnClick", function(self)
     self:Hide()
-    MM:UnassignItem(self.itemID, ActiveCategory())
+    local itemID, from = self.itemID, ActiveCategory()
+    local before = Changes.Snapshot(itemID)
+    MM:UnassignItem(itemID, from)
+    Fresh.Unmark(itemID, from)
+    -- Marked where it is now, and said in chat
+    for _, path in ipairs(Changes.Where(itemID)) do Fresh.Mark(itemID, path) end
+    Changes.Report(itemID, "removed from", from, before)
+
     countsDirty = true
-    if selected == self.itemID then selected = nil end
+    if selected == itemID then selected = nil end
     MM:RefreshList()
 end)
 -- Closes on any click elsewhere, or when the window closes
@@ -1368,7 +1607,14 @@ local function Drop()
     dragIcon:Hide()
     MM:EndTargetDrag()
     if itemID and target then
+        -- Only a real addition gets marked and reported; it's no longer Uncategorized either way
+        local before = Changes.Snapshot(itemID)
         MM:AssignItem(itemID, target.path)
+        Fresh.Unmark(itemID, UNCAT)
+        if not before[target.path] then
+            Fresh.Mark(itemID, target.path)
+            Changes.Report(itemID, "added to", target.path, before)
+        end
         countsDirty = true
         MM:RefreshList()
     end
@@ -1451,6 +1697,8 @@ local function CreateItemRow(i)
     row.sold = row:CreateTexture(nil, "BACKGROUND", nil, -1)
     row.sold:SetAllPoints()
     row.sold:SetColorTexture(ACCENT[1], ACCENT[2], ACCENT[3], 0.07)
+
+    row.fresh = FreshGlow(row)
 
     row.icon = row:CreateTexture(nil, "ARTWORK")
     row.icon:SetSize(16, 16)
@@ -1626,12 +1874,28 @@ panel:SetScript("OnShow", function()
 end)
 
 panel:SetScript("OnHide", function()
+    Fresh.Forget()
     dragIcon:Hide()
     dragIcon.itemID = nil
     box:ClearFocus()
     CloseEditor()
     MM.activeVendors = nil
     MM:RefreshMap()
+end)
+
+-- /mm reset categories and /mm reset all: what each resets, and a [Confirm] link that does it
+local RESETS = {
+    categories = { "your own categories and sorting go back to the defaults, and every item is sorted again",
+        function() MM:ResetCategories() end },
+    all = { "all saved data is wiped (settings, categories, hidden vendors and everything you've recorded) and the UI reloads",
+        function() MM:ResetEverything() end },
+}
+
+MM:OnChatLink("reset", function(which)
+    local reset = RESETS[which]
+    if not reset then return end
+    reset[2]()
+    if which == "categories" then print("|cffccb084Merchant Map:|r categories reset to the defaults.") end
 end)
 
 SLASH_MERCHANTMAP1 = "/mm"
@@ -1660,6 +1924,10 @@ SlashCmdList.MERCHANTMAP = function(input)
     elseif msg == "auto" then
         local count = MM:AutoCategorizeUncategorized()
         print(("|cffccb084Merchant Map:|r auto-categorizing %d uncategorized items."):format(count))
+    elseif RESETS[msg:match("^reset (%a+)$") or ""] then
+        local which = msg:match("^reset (%a+)$")
+        print(("|cffccb084Merchant Map:|r this resets %s: %s. %s"):format(which, RESETS[which][1],
+            MM:ChatLink("reset", which, "Confirm")))
     elseif msg ~= "" then
         MM:Search(input)
     else
