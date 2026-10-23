@@ -1,6 +1,6 @@
 # Merchant Map
 
-## Unreleased
+## 1.1.6
 
 - Clicking an item now shows where it lives: its categories glow faintly blue in the tree (or the folded category they're in, or Uncategorized).
 
