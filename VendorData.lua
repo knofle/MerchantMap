@@ -2,7 +2,7 @@ local _, MM = ...
 
 -- Classic NPC and item data, derived from Questie's database (https://github.com/Questie/Questie),
 -- which is licensed under the GNU General Public License v3.
--- Modified for Merchant Map on 2026-10-24 from QuestieDB 1.0.7 (Forever): vendors and service NPCs extracted and converted to this format.
+-- Modified for Merchant Map on 2026-10-26 from QuestieDB 1.0.9 (Forever): vendors and service NPCs extracted and converted to this format.
 -- Merchant Map's own recorded data (from visiting or talking to NPCs) takes over their position and adds prices
 -- and any items missing here.
 -- Vendors: [npcID] = { name, title, friendlyTo ("A", "H", "AH"), areaID, x, y, { itemIDs sold } }  (x/y in 0-100)
@@ -909,9 +909,9 @@ MM.knownVendors = {
 [16543]={"Garon Hutchins",nil,"AH",1377,52.51,38.65,{23160,23161}},
 [17598]={"Renn'az","Ammunition Vendor","H",47,76.85,81.4,{2512,2515,3030,5439,11285,11362}},
 [28776]={"Elizabeth Ross","Tabard Vendor","A",36,15.82,69.02,{285327}},
-[28989]={"Aemara","Bowyer","A",36,15.5,70.25,{2504,2505,2506,2507,2512,2515,3026,3027,3030,5439,11362}},
+[28989]={"Aemara","Bowyer","AH",36,15.5,70.25,{2504,2505,2506,2507,2512,2515,3026,3027,3030,5439,11362}},
 [28990]={"Anthony Durain","Shields","A",36,20.15,63.77,{2445,2446,2448,2451,17188,17189,17190,17192}},
-[29049]={"Arille Azuregaze","Bartender","A",36,18.39,65.81,{1179,1205,1645,1708,2593,2594,2595,2596,2723,8766}},
+[29049]={"Arille Azuregaze","Bartender","AH",36,18.39,65.81,{1179,1205,1645,1708,2593,2594,2595,2596,2723,8766}},
 [29491]={"Karandonna","Clothier","A",36,15.98,65.44,{3426,3427,3428}},
 [29537]={"Darahir","Reagents & Magical Goods","A",36,21.68,69.03,{3385,3827,5565,16583,17020,17021,17026,17028,17029,17030,17031,17032,17033,17034,17035,17036,17037,17038,21177}},
 [29547]={"Applebough","Fruit Vendor","A",36,14.31,65.94,{4536,4537,4538,4539,4602,8953,285359}},
@@ -1009,7 +1009,7 @@ MM.knownVendors = {
 [260487]={"Gritta Chumwater","Fisherman","AH",16591,78.39,54.98,{6256,6330,6365,6368,6529,6530,6532,6533,271657,273636}},
 [260559]={"Gilliwigs","Trade Goods","A",16591,79.31,54.65,{2320,2321,2325,2604,2678,2692,2880,2901,2928,3371,3372,3466,3713,3857,4289,4291,4340,4341,4342,4399,4400,6217,6256,6530,6532,7005,8343,8925}},
 [260560]={"Krikshank","Poison Vendor","AH",16591,76.81,51.17,{2928,2930,3371,3372,5060,5140,5173,8923,8924,8925,271654}},
-[260565]={"Kor'gar","Engineering Supplies","A",16591,77.64,50.92,{2880,2901,3466,4357,4361,4363,4364,4371,4382,4389,4399,4400,4404,5956,10647,10648,16046,16047,271653}},
+[260565]={"Kor'gar","Engineering Supplies","AH",16591,77.64,50.92,{2880,2901,3466,4357,4361,4363,4364,4371,4382,4389,4399,4400,4404,5956,10647,10648,16046,16047,271653}},
 [260566]={"Fizzix Boomshot","Gunsmith","AH",16591,78.59,53.66,{2516,2519,3023,3024,3025,3033,11284,18650}},
 [260570]={"Stitch Pinwizzle","Tailoring Supplies","AH",16591,77.33,51.47,{2320,2321,2324,2325,2604,2605,4291,4340,4341,4342,6260,6261,7088,8343,10290,14341,21358,253665,253668}},
 [262469]={"Tuu'li","Magnificent Mystic","H",406,71.23,98.89,{3371,5042,5048}},
@@ -1024,7 +1024,7 @@ MM.knownVendors = {
 [265576]={"Rettrick","Gadgetzan Quartermaster","AH",440,51.27,27.49,{274023,274750,274751,274752,274753,274754}},
 [265730]={"Ajay Green","Bartender","A",36,14.45,64.59,{414,422,1179,1205,1645,1707,1708,2070,3927,4536,4537,4538,4539,4540,4541,4542,4544,4601,4602,8766,8932,8950,8953}},
 [265756]={"Genn Fairweather","Stablemaster and Riding Trainer","AH",16593,53.83,81.33,{269671,269678,269681,269683,274930,274933}},
-[267000]={"Paige","Chef","A",36,20.88,74.61,{2678,2692,3713,4470,4471,4536,10284,11291,21099,21219,272941}},
+[267000]={"Paige","Chef","AH",36,20.88,74.61,{2678,2692,3713,4470,4471,4536,10284,11291,21099,21219,272941}},
 [267001]={"Cody","Baker","A",36,21.83,74.29,{4540,4541,4542,4544,4601,8950}},
 [267324]={"Margaret Weaver","Junior Skinning Trainer","H",85,32.6,65.81,{2320,4289,7005,277114}},
 [267325]={"Walter Mason","Junior Mining Trainer","H",85,32.22,65.82,{2901,5956,277115}},
@@ -4166,7 +4166,7 @@ MM.knownServices = {
 [16458]={"Innkeeper Faralia","Innkeeper","A",406,35.79,5.74,{"Services/Innkeepers"}},
 [28687]={"Amisi Azuregaze","Innkeeper","A",36,18.25,66.48,{"Services/Innkeepers"}},
 [28694]={"Alard Schmied","Blacksmith","A",36,19.81,63.4,{"Services/Trainers/Professions/Blacksmithing"}},
-[28989]={"Aemara","Bowyer","A",36,15.5,70.25,{"Services/Repair"}},
+[28989]={"Aemara","Bowyer","AH",36,15.5,70.25,{"Services/Repair"}},
 [28990]={"Anthony Durain","Shields","A",36,20.15,63.77,{"Services/Repair"}},
 [32413]={"Isirami Fairwind","Innkeeper","A",36,12.14,66.4,{"Services/Innkeepers"}},
 [243815]={"Sebelia","Innkeeper","A",616,70.83,51.5,{"Services/Innkeepers"}},
@@ -4182,7 +4182,7 @@ MM.knownServices = {
 [247227]={"Riley Peltskinner","Junior Skinning Trainer","A",12,46.96,39.92,{"Services/Trainers/Professions/Skinning"}},
 [248197]={"Gor'mak","Blacksmith","H",17,49.82,29.68,{"Services/Repair"}},
 [248415]={"Tordrin Sternblade","Hunter Trainer","A",12,51.21,40.8,{"Services/Trainers/Classes/Hunter"}},
-[249713]={"Odd Child",nil,"A",40,42.83,72.76,{"Services/Trainers/Other"}},
+[249713]={"Odd Child",nil,"AH",40,42.83,72.76,{"Services/Trainers/Other"}},
 [251364]={"Destin Thriceforged","Weapon Merchant","AH",16593,43.43,23.5,{"Services/Repair"}},
 [251365]={"Jolee Brightmeadows","Cloth & Leather Armor","AH",16593,43.52,23.6,{"Services/Repair"}},
 [251373]={"Xyton Silverwind","Druid Trainer","AH",16593,41.66,23.33,{"Services/Trainers/Classes/Druid"}},
@@ -4292,8 +4292,8 @@ MM.knownServices = {
 [271478]={"Elaria Anvilwind","Artisan Armorsmith","AH",16593,59.54,76.14,{"Services/Repair"}},
 [271480]={"Taliaa Brightsky","Artisan Clothier","AH",16593,59.33,76.24,{"Services/Repair"}},
 [271483]={"Ergaan Eastwind","Artisan Leather Goods","AH",16593,59.72,75.95,{"Services/Repair"}},
-[275210]={"Teller Rames","Banker","A",36,22.93,64.41,{"Services/Bankers"}},
-[275212]={"Teller Hanners","Banker","A",36,23.07,65.08,{"Services/Bankers"}},
+[275210]={"Teller Rames","Banker","AH",36,22.93,64.41,{"Services/Bankers"}},
+[275212]={"Teller Hanners","Banker","AH",36,23.07,65.08,{"Services/Bankers"}},
 [275243]={"Teller Gee","Banker","A",36,10.41,68.48,{"Services/Bankers"}},
 [275321]={"Edward Egan","Herbalist","A",36,18.19,64.92,{"Services/Trainers/Professions/Herbalism"}},
 [275322]={"Patricia Egan","Alchemist","A",36,18.56,62.39,{"Services/Trainers/Professions/Alchemy"}},
