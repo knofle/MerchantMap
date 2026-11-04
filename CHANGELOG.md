@@ -1,5 +1,10 @@
 # Merchant Map
 
+## 1.1.8
+
+- Updated vendor data: 6 more vendors and 5 more trainers and other service NPCs.
+- Mailboxes in Stormwind, Ironforge, Orgrimmar and Undercity no longer show up several times in the same spot.
+
 ## 1.1.7
 
 - Clicking an item now shows where it lives: its categories glow faintly blue in the tree (or the folded category they're in, or Uncategorized).
@@ -31,3 +36,8 @@
 - Lighter after login: the world map no longer redraws its pins while items are being sorted into categories.
 - Opening a shop does a little less work.
 - The direction arrow no longer sticks to the mouse after dragging it with other buttons held or quick mouse moves.
+
+## 1.1.4
+
+- Fixed some sorting into categories. Things that restore mana now mainly go into the drinks category.
+- Nearest vendor search now changes background color for which items in your search it sells.

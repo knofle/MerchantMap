@@ -2,10 +2,11 @@
 ## Title: Merchant Map
 ## Notes: Records vendor stock as you browse and shows where to buy items on the world map.
 ## Author: Knofle
-## Version: 1.1.7
+## Version: 1.1.8
 ## SavedVariables: MerchantMapDB, VendorAtlasDB
 ## IconTexture: Interface\AddOns\MerchantMap\icon
 ## X-Wago-ID: QNl4qxNe
+## X-Curse-Project-ID: 1730694
 
 Libs\LibStub\LibStub.lua
 Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua

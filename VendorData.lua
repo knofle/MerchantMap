@@ -2,7 +2,7 @@ local _, MM = ...
 
 -- Classic NPC and item data, derived from Questie's database (https://github.com/Questie/Questie),
 -- which is licensed under the GNU General Public License v3.
--- Modified for Merchant Map on 2026-10-26 from QuestieDB 1.0.9 (Forever): vendors and service NPCs extracted and converted to this format.
+-- Modified for Merchant Map on 2026-11-04 from QuestieDB 1.0.10 (Forever): vendors and service NPCs extracted and converted to this format.
 -- Merchant Map's own recorded data (from visiting or talking to NPCs) takes over their position and adds prices
 -- and any items missing here.
 -- Vendors: [npcID] = { name, title, friendlyTo ("A", "H", "AH"), areaID, x, y, { itemIDs sold } }  (x/y in 0-100)
