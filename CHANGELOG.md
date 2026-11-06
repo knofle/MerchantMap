@@ -1,5 +1,10 @@
 # Merchant Map
 
+## 1.1.9
+
+- Updated vendor data: corrected the positions of 18 vendors and a few trainers and other service NPCs.
+- Fixed a Lua error when opening a vendor in places where the game hides NPC names from addons.
+
 ## 1.1.8
 
 - Updated vendor data: 6 more vendors and 5 more trainers and other service NPCs.
@@ -36,8 +41,3 @@
 - Lighter after login: the world map no longer redraws its pins while items are being sorted into categories.
 - Opening a shop does a little less work.
 - The direction arrow no longer sticks to the mouse after dragging it with other buttons held or quick mouse moves.
-
-## 1.1.4
-
-- Fixed some sorting into categories. Things that restore mana now mainly go into the drinks category.
-- Nearest vendor search now changes background color for which items in your search it sells.

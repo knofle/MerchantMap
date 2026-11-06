@@ -43,7 +43,8 @@ local scanPending, scanIncomplete, scanAttempts = false, false, 0
 
 local function VendorKey()
     local name = UnitName("npc")
-    if not name then return end
+    -- Secret names (like in some instances) can't be keys, so there's nothing to record
+    if not name or (issecretvalue and issecretvalue(name)) then return end
     local guid = UnitGUID("npc")
     if guid and not (issecretvalue and issecretvalue(guid)) then
         local unitType, _, _, _, _, npcID = strsplit("-", guid)
