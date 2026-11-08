@@ -370,6 +370,13 @@ Check("Minimap button", "Opens Merchant Map",
     function() return not (MM.db.minimapButton and MM.db.minimapButton.hide) end,
     function(on) MM:SetMinimapButtonShown(on) end)
 
+Check("Reagent buttons", "Search reagents from professions",
+    function() return MM.db.tradeSkillButtons end,
+    function(on)
+        MM.db.tradeSkillButtons = on or nil
+        MM:RefreshTradeSkillButtons()
+    end)
+
 Section("Map")
 
 -- Hidden vendors show grey while this is on, so alt-clicking can bring them back
