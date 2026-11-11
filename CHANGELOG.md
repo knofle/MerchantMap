@@ -1,5 +1,9 @@
 # Merchant Map
 
+## 1.1.12
+
+- Updated vendor data: 35 more vendors and 47 more trainers and other service NPCs checked in game, the new Darkspear Islands battlemasters, and corrected positions for several vendors and battlemasters.
+
 ## 1.1.11
 
 - New option "Reagent buttons" (off by default): reagents in the profession window that Merchant Map knows a vendor for get a small search button. Click it to look the reagent up in Merchant Map.
@@ -17,12 +21,4 @@
 
 - Updated vendor data: 6 more vendors and 5 more trainers and other service NPCs.
 - Mailboxes in Stormwind, Ironforge, Orgrimmar and Undercity no longer show up several times in the same spot.
-
-## 1.1.7
-
-- Clicking an item now shows where it lives: its categories glow faintly blue in the tree (or the folded category they're in, or Uncategorized).
-
-- Adding an item to a category (drag and drop) or removing it (right-click) now says in chat where the item is now, with a clickable [Undo].
-- Items you drop on a category, or that land somewhere after a remove, are marked in soft blue until you've seen them there, and that category glows blue in the tree (also on a folded parent) until then.
-- New reset options, with buttons on the options page: /mm reset categories puts the categories back to the defaults and sorts every item again, /mm reset all wipes all saved data and settings.
 
