@@ -1,5 +1,9 @@
 # Merchant Map
 
+## 1.1.13
+
+- Fixed a Lua error when resizing the window with the mouse over an item.
+
 ## 1.1.12
 
 - Updated vendor data: 35 more vendors and 47 more trainers and other service NPCs checked in game, the new Darkspear Islands battlemasters, and corrected positions for several vendors and battlemasters.
@@ -16,9 +20,4 @@
 
 - Updated vendor data: corrected the positions of 18 vendors and a few trainers and other service NPCs.
 - Fixed a Lua error when opening a vendor in places where the game hides NPC names from addons.
-
-## 1.1.8
-
-- Updated vendor data: 6 more vendors and 5 more trainers and other service NPCs.
-- Mailboxes in Stormwind, Ironforge, Orgrimmar and Undercity no longer show up several times in the same spot.
 

@@ -398,14 +398,17 @@ local function IsTargetOwner(frame)
     return targetButton and targetButton.owner == frame and targetButton:IsShown()
 end
 
--- Placed by screen position rather than anchored, since the owner is not a secure frame
+-- Placed by screen position rather than anchored, since the owner is not a secure frame.
+-- False while the owner has no position yet (mid-layout during a window resize).
 local function PlaceTargetButton(owner)
     local b = targetButton
     local scale = owner:GetEffectiveScale() / b:GetEffectiveScale()
     local x, y = owner:GetCenter()
+    if not (x and y) then return false end
     b:SetSize(owner:GetWidth() * scale, owner:GetHeight() * scale)
     b:ClearAllPoints()
     b:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x * scale, y * scale)
+    return true
 end
 
 -- Never mid-drag: hiding the button would end the drag
@@ -439,8 +442,8 @@ local function AttachTargetButton(owner, opts)
         b:SetPassThroughButtons("RightButton")
     end
     if opts.onDragStart then b:RegisterForDrag("LeftButton") else b:RegisterForDrag() end
-    PlaceTargetButton(owner)
-    b:Show()
+    -- Unplaced, it would sit over the wrong row; the next hover places it
+    if PlaceTargetButton(owner) then b:Show() else b:Hide() end
 end
 
 local function SpreadRow(i)
