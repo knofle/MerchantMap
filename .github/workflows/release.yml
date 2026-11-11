@@ -7,15 +7,11 @@ permissions:
   contents: write
 jobs:
   release:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      # The packager installs subversion (for the svn externals) without refreshing the package
-      # list first, which fails when the runner's list is stale. Installing it here skips that.
-      - name: Install subversion
-        run: sudo apt-get update -q && sudo apt-get install -yq subversion
       - name: Package and release
         uses: BigWigsMods/packager@master
         env:

@@ -1,6 +1,6 @@
 # Merchant Map
 
-## 1.1.15
+## 1.2.0
 
 - The window's title now shows the version number.
 - Fixed a Lua error when resizing the window with the mouse over an item.
