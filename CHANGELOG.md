@@ -2,6 +2,7 @@
 
 ## 1.1.13
 
+- The window's title now shows the version number.
 - Fixed a Lua error when resizing the window with the mouse over an item.
 
 ## 1.1.12

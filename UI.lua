@@ -129,6 +129,17 @@ title:SetPoint("TOPLEFT", 10, -7)
 title:SetText("Merchant Map")
 title:SetTextColor(ACCENT[1], ACCENT[2], ACCENT[3])
 
+-- Version from the .toc, small and muted after the title (in a block to spare file-level locals)
+do
+    local GetMetadata = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
+    local version = GetMetadata and GetMetadata("MerchantMap", "Version")
+    if version then
+        local versionText = header:CreateFontString(nil, "OVERLAY", "MM_GameFontDisableSmall")
+        versionText:SetPoint("BOTTOMLEFT", title, "BOTTOMRIGHT", 6, 1)
+        versionText:SetText("v" .. version)
+    end
+end
+
 local close = CreateFrame("Button", nil, header)
 close:SetSize(20, 20)
 close:SetPoint("TOPRIGHT", -4, -4)
