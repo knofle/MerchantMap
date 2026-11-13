@@ -1,5 +1,12 @@
 # Merchant Map
 
+## 1.2.1
+
+- Updated vendor data:
+  - 13 more vendors, among them Jenna the Mustard Queen in Stranglethorn Vale, a bartender and a chef in the Wetlands, Zippie Fizzbolt the Everlook Quartermaster, Dala Fairmaw the Quartermaster in Mount Hyjal, and Dorb's rare goods.
+  - 3 more bankers, 4 more innkeepers, Auctioneer Quickcoin in the Barrens and Master Mycologist Shurome in Felwood.
+  - Now shown for both factions: Mika Darby, Gilliwigs, Xaphod Bizznox, several vendors in Mount Hyjal, and the mining and fishing trainers Grungle and Krix.
+
 ## 1.2.0
 
 - The window's title now shows the version number.
@@ -16,9 +23,4 @@
 ## 1.1.10
 
 - Updated vendor data: 5 more mailboxes in Stormwind and Orgrimmar. Reagent Bot is no longer listed as a vendor.
-
-## 1.1.9
-
-- Updated vendor data: corrected the positions of 18 vendors and a few trainers and other service NPCs.
-- Fixed a Lua error when opening a vendor in places where the game hides NPC names from addons.
 
