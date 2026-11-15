@@ -1404,9 +1404,6 @@ local function Row_OnEnter(self)
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine(reason)
     end
-    GameTooltip:AddLine(" ")
-    GameTooltip:AddLine("Sold by:", ACCENT[1], ACCENT[2], ACCENT[3])
-
     local keys, where = {}, {}
     for key in pairs(item.vendors) do
         local vendor = MM.db.vendors[key]
@@ -1415,6 +1412,8 @@ local function Row_OnEnter(self)
             where[key] = MM:LocationText(vendor)
         end
     end
+    GameTooltip:AddLine(" ")
+    GameTooltip:AddLine(#keys == 1 and "Only sold by:" or "Sold by:", ACCENT[1], ACCENT[2], ACCENT[3])
     -- Vendors that didn't have it in stock at the last visit go together at the bottom
     table.sort(keys, function(a, b)
         local lateA, lateB = item.vendors[a].notSeen or false, item.vendors[b].notSeen or false
@@ -1438,6 +1437,8 @@ local function Row_OnEnter(self)
         else
             GameTooltip:AddDoubleLine(text, MM:PriceText(offer), 1, 1, 1, 1, 1, 1)
         end
+        local note = MM:VendorNote(key)
+        if note then GameTooltip:AddLine("   " .. note, 1, 0.6, 0.3) end
     end
 
     local set = MM.db.itemCats[self.itemID]
@@ -1926,6 +1927,9 @@ SlashCmdList.MERCHANTMAP = function(input)
         MM:PointToNextUnvisited()
         print(("|cffccb084Merchant Map:|r map shows %s."):format(
             MM.verifyMode and "only NPCs you haven't visited" or "your usual pins again"))
+    elseif msg == "patrols" then
+        -- Not in the help: every patrolling vendor on the map, both factions, for checking routes
+        MM:TogglePatrols()
     elseif msg == "options" then
         MM:OpenOptions()
     elseif msg == "arrow" then

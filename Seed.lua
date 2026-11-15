@@ -63,6 +63,10 @@ local function AreaMap(areaID)
     return mapID or nil
 end
 
+function MM:AreaMap(areaID)
+    return areaMaps and AreaMap(areaID)
+end
+
 -- Confirmed NPC positions, from talking to them: yours (db.verifiedServices) or shipped, whichever is newer.
 -- Keyed "s" .. npcID for service NPCs and by Classic NPC ID for vendors whose shop you couldn't open.
 -- New service NPCs that aren't in the Classic data also carry their paths and faction.

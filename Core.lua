@@ -312,6 +312,21 @@ function MM:LocationText(vendor)
     return ("%s %.1f, %.1f"):format(info.name, vendor.x * 100, vendor.y * 100)
 end
 
+-- The NPC ID VendorData knows a vendor by: its Classic ID when it stands in for one.
+-- Service NPC keys ("s" .. npcID) work too, as vendors who patrol often repair as well,
+-- and so do the "p" .. npcID keys of /mm patrols.
+function MM:VendorDataID(key)
+    local vendor = self.db.vendors[key]
+    key = tostring(key)
+    return vendor and vendor.seedID or tonumber(key) or tonumber(key:match("^(%d+)@") or key:match("^[sp](%d+)$"))
+end
+
+-- Note for a vendor from VendorData (patrols and the like)
+function MM:VendorNote(key)
+    local id = self:VendorDataID(key)
+    return id and self.vendorNotes and self.vendorNotes[id]
+end
+
 function MM:ZoneName(vendor)
     local info = vendor.mapID and C_Map.GetMapInfo(vendor.mapID)
     return info and info.name or "Unknown"

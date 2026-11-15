@@ -61,6 +61,10 @@ local function PosOnMap(vendor, mapID)
     if rect then return rect[1] + vendor.x * rect[2], rect[3] + vendor.y * rect[4] end
 end
 
+function MM:PosOnMap(vendor, mapID)
+    return PosOnMap(vendor, mapID)
+end
+
 -- Where an NPC stands in world coordinates (yards, same axes as UnitPosition), worked out once per spot
 local worldPos = setmetatable({}, { __mode = "k" })
 local function WorldPos(npc)
@@ -651,6 +655,7 @@ local function SetHovered(pin)
     if hovered then
         RaisePin(hovered, false)
         GameTooltip:Hide()
+        MM:HideVendorRoute()
     end
     hovered = pin
     if not pin then
@@ -659,6 +664,7 @@ local function SetHovered(pin)
     end
 
     RaisePin(pin, true)
+    MM:ShowVendorRoute(pin)
     pin.stacked = #OverlappingPins(pin)
     MM:ShowVendorTooltip(pin, pin.key, pin.stacked)
     AttachPinTargeting(pin)
@@ -696,10 +702,13 @@ tracker:SetScript("OnUpdate", function(self, dt)
         and not (GameTooltip:IsOwned(hovered) and GameTooltip:IsShown()) then
         MM:ShowVendorTooltip(hovered, hovered.key, hovered.stacked)
     end
-    -- Nothing to recheck while the cursor, zoom and pins stay put
-    if x == lastX and y == lastY and scale == lastScale then return end
+    MM:SyncVendorRoute(hovered)
+    -- Nothing to recheck while the cursor, zoom and pins stay put. A map refresh drops the hover, and the
+    -- mouse may only land on the new pin a moment later, so keep looking while nothing is hovered.
+    if x == lastX and y == lastY and scale == lastScale and (hovered or not MouseOnPins()) then return end
     lastX, lastY, lastScale = x, y, scale
     SetHovered(NearestPin())
+    MM:SyncVendorRoute(hovered)
     -- Follow the pin if the map is zoomed or panned under the cursor
     if hovered and IsTargetOwner(hovered) and not InCombatLockdown() then PlaceTargetButton(hovered) end
 end)
@@ -795,6 +804,10 @@ end
 local function PinnedVendors()
     local db = MM.db
     local pinned = {}
+    if MM.patrolNPCs then
+        for key in pairs(MM.patrolNPCs) do pinned[key] = true end
+        return pinned
+    end
     if MM.verifyMode then
         pinned = UnvisitedNPCs()
         if MM.minimapKey and MM:GetNPC(MM.minimapKey) then pinned[MM.minimapKey] = true end
@@ -902,7 +915,7 @@ end
 
 -- Vendors are keyed by NPC ID, service NPCs (trainers etc.) by "s" .. NPC ID
 function MM:GetNPC(key)
-    return self.db.vendors[key] or (self.services and self.services[key])
+    return self.db.vendors[key] or (self.services and self.services[key]) or (self.patrolNPCs and self.patrolNPCs[key])
 end
 
 -- Tooltip for a trainer, flight master or other service NPC
@@ -913,6 +926,8 @@ function MM:ShowServiceTooltip(owner, key, stacked, anchor)
     GameTooltip:AddLine(npc.name, 0.55, 0.85, 0.9)
     if npc.title then GameTooltip:AddLine("<" .. npc.title .. ">", 0.8, 0.8, 0.8) end
     GameTooltip:AddLine(self:LocationText(npc), 0.8, 0.8, 0.8)
+    local note = self:VendorNote(key)
+    if note then GameTooltip:AddLine(note, 1, 0.6, 0.3, true) end
     GameTooltip:AddLine(" ")
     for _, path in ipairs(npc.paths) do
         GameTooltip:AddLine((path:gsub("^Services/", ""):gsub("/", " > ")), 1, 1, 1)
@@ -963,6 +978,7 @@ function MM:RefreshMap()
 end
 
 function MM:ShowVendorTooltip(owner, key, stacked)
+    if self.patrolNPCs and self.patrolNPCs[key] then return self:ShowPatrolTooltip(owner, key) end
     if self.services and self.services[key] then return self:ShowServiceTooltip(owner, key, stacked) end
     local vendor = self.db.vendors[key]
     local matched = self.pinned and self.pinned[key]
@@ -987,6 +1003,8 @@ function MM:ShowVendorTooltip(owner, key, stacked)
     GameTooltip:AddLine(vendor.name, 1, 0.82, 0)
     if vendor.title then GameTooltip:AddLine("<" .. vendor.title .. ">", 0.8, 0.8, 0.8) end
     GameTooltip:AddLine(self:LocationText(vendor), 0.8, 0.8, 0.8)
+    local note = self:VendorNote(key)
+    if note then GameTooltip:AddLine(note, 1, 0.6, 0.3, true) end
     GameTooltip:AddLine(" ")
 
     local lateShown

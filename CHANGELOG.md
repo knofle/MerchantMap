@@ -1,5 +1,13 @@
 # Merchant Map
 
+## 1.2.2
+
+- Vendors that walk around or spawn in more than one place, like Zixil and Pexmit, now say so in item and map pin tooltips. Hovering their map pin shows their patrol route as a line, or their spawn spots as dots. Items with a single vendor show "Only sold by".
+- Updated vendor data:
+  - 65 more vendors and 71 more trainers, flight masters and other service NPCs checked in game, among them the vendors and flight master Fayran Elthas in Mount Hyjal.
+  - Also new: Pexmit and innkeeper Ortak Lomgok in Mount Hyjal, and journeyman blacksmith Gur'dok.
+  - Gilliwigs is shown for the Alliance only again.
+
 ## 1.2.1
 
 - Updated vendor data:
@@ -19,8 +27,4 @@
 ## 1.1.11
 
 - New option "Reagent buttons" (off by default): reagents in the profession window that Merchant Map knows a vendor for get a small search button. Click it to look the reagent up in Merchant Map.
-
-## 1.1.10
-
-- Updated vendor data: 5 more mailboxes in Stormwind and Orgrimmar. Reagent Bot is no longer listed as a vendor.
 
