@@ -594,6 +594,12 @@ local hovered
 local tracker = CreateFrame("Frame")
 tracker:Hide()
 
+-- The marked vendor's pin, found on each refresh. Its route stays drawn while no other pin is hovered.
+local markedPin
+local function RoutePin(pin)
+    return pin or (markedPin and WorldMapFrame:IsVisible() and markedPin.key == MM.minimapKey and markedPin) or nil
+end
+
 -- Whether the cursor is on one of our pins, and whether it's on the map at all
 local function MouseOnPins()
     local focus = GetMouseFoci and GetMouseFoci()[1] or (GetMouseFocus and GetMouseFocus())
@@ -655,16 +661,15 @@ local function SetHovered(pin)
     if hovered then
         RaisePin(hovered, false)
         GameTooltip:Hide()
-        MM:HideVendorRoute()
     end
     hovered = pin
+    MM:SyncVendorRoute(RoutePin(pin))
     if not pin then
         HideTargetButton()
         return
     end
 
     RaisePin(pin, true)
-    MM:ShowVendorRoute(pin)
     pin.stacked = #OverlappingPins(pin)
     MM:ShowVendorTooltip(pin, pin.key, pin.stacked)
     AttachPinTargeting(pin)
@@ -702,13 +707,13 @@ tracker:SetScript("OnUpdate", function(self, dt)
         and not (GameTooltip:IsOwned(hovered) and GameTooltip:IsShown()) then
         MM:ShowVendorTooltip(hovered, hovered.key, hovered.stacked)
     end
-    MM:SyncVendorRoute(hovered)
+    MM:SyncVendorRoute(RoutePin(hovered))
     -- Nothing to recheck while the cursor, zoom and pins stay put. A map refresh drops the hover, and the
     -- mouse may only land on the new pin a moment later, so keep looking while nothing is hovered.
     if x == lastX and y == lastY and scale == lastScale and (hovered or not MouseOnPins()) then return end
     lastX, lastY, lastScale = x, y, scale
     SetHovered(NearestPin())
-    MM:SyncVendorRoute(hovered)
+    MM:SyncVendorRoute(RoutePin(hovered))
     -- Follow the pin if the map is zoomed or panned under the cursor
     if hovered and IsTargetOwner(hovered) and not InCombatLockdown() then PlaceTargetButton(hovered) end
 end)
@@ -855,7 +860,9 @@ local function NearbyPos(vendor, mapID)
 end
 
 function Provider:RefreshAllData()
+    markedPin = nil -- its pin is about to be released
     SetHovered(nil)
+    MM:HideVendorRoute()
     self:RemoveAllData()
     local map = self:GetMap()
     local mapID = map:GetMapID()
@@ -882,6 +889,7 @@ function Provider:RefreshAllData()
         end
     end
     if marked then marked:SetFrameLevel(math.max(marked:GetFrameLevel(), topPinLevel + 1)) end
+    markedPin = marked
     lastX = nil
     tracker:Show()
 end

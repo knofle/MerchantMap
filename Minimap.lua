@@ -75,6 +75,150 @@ local function ReadSettings()
     square = GetMinimapShape and GetMinimapShape() == "SQUARE"
 end
 
+-- Patrol route or spawn spots of the marked vendor, as on the world map (Routes.lua), clipped to
+-- the minimap's edge. Points are turned into world yards once, when the vendor is marked.
+local ROUTE_DOT, ROUTE_LINE, ROUTE_RIM = 5, 2.5, 1.5 -- on screen; ROUTE_RIM is the black edge
+local ROUTE_COLOR = { 0.90, 0.30, 0.22, 0.95 }
+local ROUTE_MASK = "Interface\\AddOns\\MerchantMap\\routedot"
+local ROUTE_TEX = "Interface\\AddOns\\MerchantMap\\routeline"
+local routeLayer = CreateFrame("Frame", nil, Minimap)
+routeLayer:SetAllPoints()
+routeLayer:SetFrameLevel(Minimap:GetFrameLevel() + 9) -- just under the pin
+routeLayer:Hide()
+local routeDots, routeLines = {}, {}
+local route, routeDrawn -- routeDrawn: what the route was last drawn for, so it's redrawn only on change
+
+local function BuildRoute(key)
+    route, routeDrawn = nil, nil
+    routeLayer:Hide()
+    local id = key and MM:VendorDataID(key)
+    local data = id and MM.vendorRoutes and MM.vendorRoutes[id]
+    local spawns = id and not data and MM.vendorSpawns and MM.vendorSpawns[id]
+    local mapID = (data or spawns) and MM:AreaMap((data or spawns)[1])
+    if not mapID then return end
+    route = { spawns = spawns and true }
+    local function Add(path, from)
+        local points = {}
+        for i = from, #path - 1, 2 do
+            local instance, pos = C_Map.GetWorldPosFromMapPos(mapID, CreateVector2D(path[i] / 100, path[i + 1] / 100))
+            if pos then
+                route.instance = instance
+                points[#points + 1], points[#points + 2] = pos:GetXY()
+            end
+        end
+        route[#route + 1] = points
+    end
+    if spawns then Add(spawns, 2) else for p = 2, #data do Add(data[p], 1) end end
+end
+
+local function RouteDot(i, x, y, size)
+    local dot = routeDots[i]
+    if not dot then
+        dot = routeLayer:CreateTexture(nil, "OVERLAY", nil, 1)
+        dot:SetTexture(ROUTE_MASK)
+        dot:SetVertexColor(unpack(ROUTE_COLOR))
+        dot.outline = routeLayer:CreateTexture(nil, "OVERLAY", nil, 0)
+        dot.outline:SetTexture(ROUTE_MASK)
+        dot.outline:SetVertexColor(0, 0, 0, 0.9)
+        dot.outline:SetPoint("CENTER", dot)
+        routeDots[i] = dot
+    end
+    dot:SetSize(size, size)
+    dot:SetPoint("CENTER", Minimap, "CENTER", x, y)
+    dot.outline:SetSize(size + ROUTE_RIM * 2, size + ROUTE_RIM * 2)
+    dot:Show()
+    dot.outline:Show()
+end
+
+local function RouteLine(i, x1, y1, x2, y2)
+    local line = routeLines[i]
+    if not line then
+        line = routeLayer:CreateLine(nil, "OVERLAY", nil, 1)
+        line:SetTexture(ROUTE_TEX)
+        line:SetVertexColor(unpack(ROUTE_COLOR))
+        line:SetThickness(ROUTE_LINE)
+        line.outline = routeLayer:CreateLine(nil, "OVERLAY", nil, 0)
+        line.outline:SetTexture(ROUTE_TEX)
+        line.outline:SetVertexColor(0, 0, 0, 0.9)
+        line.outline:SetThickness(ROUTE_LINE + ROUTE_RIM * 2)
+        routeLines[i] = line
+    end
+    for _, l in ipairs({ line, line.outline }) do
+        l:SetStartPoint("CENTER", Minimap, x1, y1)
+        l:SetEndPoint("CENTER", Minimap, x2, y2)
+        l:Show()
+    end
+end
+
+-- Set per draw: player position, yards to pixels, rotation and the minimap's edge
+local playerN, playerW, routeScale, rotSin, rotCos, edge
+
+local function ToMinimap(north, west)
+    local x, y = (playerW - west) * routeScale, (north - playerN) * routeScale
+    if rotSin then x, y = x * rotCos - y * rotSin, x * rotSin + y * rotCos end
+    return x, y
+end
+
+local function Inside(x, y)
+    if square then return math.abs(x) <= edge and math.abs(y) <= edge end
+    return x * x + y * y <= edge * edge
+end
+
+-- Where a segment from an inside point to an outside one crosses the edge (bisection works for
+-- round and square minimaps alike)
+local function Clip(ax, ay, bx, by)
+    local lo, hi = 0, 1
+    for _ = 1, 10 do
+        local mid = (lo + hi) / 2
+        if Inside(ax + (bx - ax) * mid, ay + (by - ay) * mid) then lo = mid else hi = mid end
+    end
+    return ax + (bx - ax) * lo, ay + (by - ay) * lo
+end
+
+local function DrawRoute(scale, sin, cos)
+    local py, px, _, instance = UnitPosition("player")
+    if not py or (issecretvalue and issecretvalue(py)) or instance ~= route.instance then
+        routeLayer:Hide()
+        routeDrawn = nil
+        return
+    end
+    local radius = Minimap:GetWidth() / 2 - 2
+    if routeDrawn and py == playerN and px == playerW and scale == routeScale and sin == rotSin
+        and radius == edge and square == routeDrawn.square then return end
+    routeDrawn = { square = square }
+    playerN, playerW, routeScale, rotSin, rotCos, edge = py, px, scale, sin, cos, radius
+
+    local dots, lines = 0, 0
+    for _, path in ipairs(route) do
+        local lastX, lastY, lastIn
+        for i = 1, #path - 1, 2 do
+            local x, y = ToMinimap(path[i], path[i + 1])
+            local inside = Inside(x, y)
+            if inside then
+                dots = dots + 1
+                RouteDot(dots, x, y, route.spawns and ROUTE_DOT or ROUTE_LINE)
+            end
+            if not route.spawns and lastX and (inside or lastIn) then
+                local x1, y1, x2, y2 = lastX, lastY, x, y
+                if not lastIn then x1, y1 = Clip(x, y, lastX, lastY) end
+                if not inside then x2, y2 = Clip(lastX, lastY, x, y) end
+                lines = lines + 1
+                RouteLine(lines, x1, y1, x2, y2)
+            end
+            lastX, lastY, lastIn = x, y, inside
+        end
+    end
+    for i = dots + 1, #routeDots do
+        routeDots[i]:Hide()
+        routeDots[i].outline:Hide()
+    end
+    for i = lines + 1, #routeLines do
+        routeLines[i]:Hide()
+        routeLines[i].outline:Hide()
+    end
+    routeLayer:Show()
+end
+
 -- Only touches the pin when where or how it shows changes, as this runs every frame
 local lastX, lastY, lastAlpha
 local function Place(x, y, alpha)
@@ -93,7 +237,11 @@ end
 local function Update()
     local east, south = Offset()
     -- Different continent: keep the target but show nothing
-    if not east then return Place(nil, nil, 0) end
+    if not east then
+        routeLayer:Hide()
+        routeDrawn = nil
+        return Place(nil, nil, 0)
+    end
 
     local zoom = Minimap:GetZoom()
     local diameter = SIZES[indoors and "indoor" or "outdoor"][zoom + 1] or SIZES.outdoor[1]
@@ -101,13 +249,15 @@ local function Update()
     local x, y = east * scale, -south * scale
 
     -- Rotating minimaps turn the world so your facing points up
+    local s, c
     if rotate then
         local facing = GetPlayerFacing()
         if facing and not (issecretvalue and issecretvalue(facing)) then
-            local s, c = math.sin(-facing), math.cos(-facing)
+            s, c = math.sin(-facing), math.cos(-facing)
             x, y = x * c - y * s, x * s + y * c
         end
     end
+    if route then DrawRoute(scale, s, c) end
 
     -- Beyond minimap range: park on the edge, dimmed
     local radius = Minimap:GetWidth() / 2 - 6
@@ -160,6 +310,7 @@ local placedWaypoint
 function MM:ClearMinimapVendor()
     target, MM.minimapKey = nil, nil
     pin:Hide()
+    BuildRoute(nil)
     if placedWaypoint then
         placedWaypoint = nil
         MM:ClearWaypoint()
@@ -172,6 +323,9 @@ end
 function MM:SetMinimapPinShown(show)
     self.db.noMinimapPin = not show or nil
     pin:SetShown(show and target ~= nil)
+    -- The route goes with the pin (drawn from its updates)
+    if not show then routeLayer:Hide() end
+    routeDrawn = nil
 end
 
 pin:SetScript("OnClick", function() MM:ClearMinimapVendor() end)
@@ -185,6 +339,7 @@ function MM:SetMinimapVendor(vendor, key, label, limited)
     ReadSettings()
     ReadIndoors(true)
     icon:SetTexture(vendor.icon or COIN)
+    BuildRoute(key)
     pin:SetShown(not MM.db.noMinimapPin)
     Update()
     -- Option: a map waypoint on the vendor too

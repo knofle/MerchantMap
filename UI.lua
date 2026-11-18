@@ -405,7 +405,12 @@ local function GroupLabel(id)
 end
 
 -- The service NPC a row stands for: itself, or the closest one of a group row
+-- Vendor rows ("d:" .. key, from searches that find nothing else) map to their vendor key here.
+-- Kept on MM.Search for UI.lua's local limit.
+S.vendorRows = {}
+
 local function ServiceKey(id)
+    if S.vendorRows[id] then return S.vendorRows[id] end
     if not IsGroup(id) then return id end
     local group = groups[id:sub(3)]
     return group and MM:ClosestServiceKey(group)
@@ -429,7 +434,7 @@ end
 local function SortName(id)
     -- Nearest and All rows of a category stay together
     if IsGroup(id) then return strlower(id:sub(3)) .. (IsNearest(id) and "1" or "2") end
-    if IsService(id) then return strlower(MM.services[id].name) end
+    if IsService(id) then return strlower(MM:GetNPC(ServiceKey(id)).name) end
     return S.LowerName(id)
 end
 
@@ -874,7 +879,7 @@ local function DrawRows()
     for i, row in ipairs(rows) do
         local itemID = i <= ROWS and results[offset + i]
         local group = IsGroup(itemID)
-        local npc = itemID and not group and IsService(itemID) and MM.services[itemID]
+        local npc = itemID and not group and IsService(itemID) and MM:GetNPC(ServiceKey(itemID))
         local item = itemID and not npc and not group and MM.db.items[itemID]
         local freshPath = item and Fresh.ItemPath(itemID, cat)
         row.fresh:SetShown(freshPath and true or false)
@@ -913,9 +918,10 @@ local function DrawRows()
             row:Show()
         elseif npc then
             row.itemID = itemID
-            row.icon:SetTexture(npc.icon or 134400)
+            local isVendor = S.vendorRows[itemID]
+            row.icon:SetTexture(isVendor and "Interface\\MoneyFrame\\UI-GoldIcon" or npc.icon or 134400)
             row.name:SetText(npc.name .. (npc.title and (" |cff8a8a8a<" .. npc.title .. ">|r") or ""))
-            row.name:SetTextColor(0.55, 0.85, 0.9)
+            if isVendor then row.name:SetTextColor(1, 0.82, 0) else row.name:SetTextColor(0.55, 0.85, 0.9) end
             row.info:SetText(MM:ZoneName(npc))
             row.sel:SetShown(itemID == selected)
             row:Show()
@@ -999,6 +1005,17 @@ function MM:RefreshList()
                 and S.ServiceMatches({ paths = { path }, name = "" }, tokens) then
                 results[#results + 1] = "a:" .. path
                 if query ~= "" then results[#results + 1] = "n:" .. path end
+            end
+        end
+    end
+    -- Vendors by name or title, only for a search over all items that found nothing else
+    wipe(S.vendorRows)
+    if #results == 0 and query ~= "" and cat == ALL and not low and not usable then
+        for key, vendor in pairs(db.vendors) do
+            if vendor.mapID and (db.showHidden or not db.hiddenVendors[key]) and S.VendorMatches(vendor, tokens) then
+                local id = "d:" .. tostring(key)
+                S.vendorRows[id] = key
+                results[#results + 1] = id
             end
         end
     end
@@ -1390,7 +1407,23 @@ local function Row_OnEnter(self)
     if IsService(self.itemID) then
         local key = ServiceKey(self.itemID)
         if not key or dragIcon:IsShown() then return end
-        MM:ShowServiceTooltip(self, key, nil, TooltipAnchor())
+        local vendor = S.vendorRows[self.itemID] and MM.db.vendors[key]
+        if vendor then
+            -- A vendor row: who they are and how much of their stock is known
+            local count = 0
+            for _ in pairs(vendor.items or {}) do count = count + 1 end
+            GameTooltip:SetOwner(self, TooltipAnchor())
+            GameTooltip:AddLine(vendor.name, 1, 0.82, 0)
+            if vendor.title then GameTooltip:AddLine("<" .. vendor.title .. ">", 0.8, 0.8, 0.8) end
+            GameTooltip:AddLine(MM:LocationText(vendor), 0.8, 0.8, 0.8)
+            local note = MM:VendorNote(key)
+            if note then GameTooltip:AddLine(note, 1, 0.6, 0.3, true) end
+            GameTooltip:AddLine(("%d items known"):format(count), 0.8, 0.8, 0.8)
+            GameTooltip:AddLine("Click to show on the map and target", 0.5, 0.5, 0.5)
+            GameTooltip:Show()
+        else
+            MM:ShowServiceTooltip(self, key, nil, TooltipAnchor())
+        end
         PlaceTooltip()
         return
     end
@@ -1512,6 +1545,8 @@ local function Row_OnClick(self, button)
                 MM:ShowVendorForItems(nearestItems.ids, nearestItems.arrow)
             elseif IsGroup(itemID) and not IsNearest(itemID) then
                 MM:ShowServicesOnMap(groups[itemID:sub(3)])
+            elseif S.vendorRows[itemID] then
+                MM:SetMinimapVendor(MM.db.vendors[key], key)
             elseif key then
                 MM:ShowServiceOnMap(key)
             end
@@ -1671,7 +1706,7 @@ function Row_Hover(self)
         vendor = key and MM.db.vendors[key]
     elseif IsService(self.itemID) then
         local key = ServiceKey(self.itemID)
-        vendor = key and MM.services[key]
+        vendor = key and MM:GetNPC(key)
     else
         local key = MM:ClosestVendorKey(self.itemID)
         vendor = key and MM.db.vendors[key]

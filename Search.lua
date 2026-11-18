@@ -319,6 +319,23 @@ local function ServiceMatches(npc, tokens)
     return true
 end
 
+-- Vendors by name or title, for searches that find nothing else. Kept out of the vendor records,
+-- which are saved.
+local vendorText = setmetatable({}, { __mode = "k" })
+
+local function VendorMatches(vendor, tokens)
+    local text = vendorText[vendor]
+    if not text then
+        text = strlower((vendor.name or "") .. " " .. (vendor.title or ""))
+        vendorText[vendor] = text
+    end
+    for _, t in ipairs(tokens) do
+        if not TokenIn(text, t) then return false end
+    end
+    return true
+end
+S.VendorMatches = VendorMatches
+
 S.LowerName, S.ParseQuery, S.Tokens, S.LevelOK, S.Usable = LowerName, ParseQuery, Tokens, LevelOK, Usable
 S.Matches, S.MatchReason, S.ServiceMatches = Matches, MatchReason, ServiceMatches
 -- Items whose level or tooltip is still loading

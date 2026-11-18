@@ -207,8 +207,28 @@ local function TitlePath(unit)
     end
 end
 
+-- A profession trainer whose title doesn't say so, from the skill line of what they teach.
+-- Only sees what the trainer window's filters list.
+local function TrainerPath()
+    if not (GetNumTrainerServices and GetTrainerServiceSkillLine) then return end
+    for i = 1, GetNumTrainerServices() or 0 do
+        local line = GetTrainerServiceSkillLine(i)
+        if line and not (issecretvalue and issecretvalue(line)) then
+            for _, profession in ipairs(PROFESSIONS) do
+                if line == profession then return "Services/Trainers/Professions/" .. profession end
+            end
+        end
+    end
+end
+
 local function NewServicePath(unit, event, kind)
     if NEW_SERVICE_EVENTS[event] then return NEW_SERVICE_EVENTS[event] end
+    local types = Enum.PlayerInteractionType
+    if event == "TRAINER_SHOW" or event == "TRAINER_UPDATE"
+        or (event == "PLAYER_INTERACTION_MANAGER_FRAME_SHOW" and types and kind == types.Trainer) then
+        local path = TrainerPath()
+        if path then return path end
+    end
     if event == "PLAYER_INTERACTION_MANAGER_FRAME_SHOW" and Enum.PlayerInteractionType then
         for name, path in pairs(NEW_SERVICE_TYPES) do
             if Enum.PlayerInteractionType[name] == kind then return path end
@@ -250,6 +270,8 @@ local function ConfirmNPC(unit, event, kind)
     local changed = false
 
     local key, npc = FindNPC(MM.services, npcID and "s" .. npcID, name, zone)
+    -- The trainer list can load after the window opens; its updates only matter for a trainer not yet known
+    if event == "TRAINER_UPDATE" and (npc or not npcID) then return end
     if npc then
         -- New NPCs keep what they offer, since the Classic data can't supply it
         local isNew = not MM.knownServices[tonumber(key:sub(2))]
@@ -271,6 +293,10 @@ local function ConfirmNPC(unit, event, kind)
         changed = true
     end
 
+    if event == "TRAINER_UPDATE" then
+        if changed then MM:OnDataChanged() end
+        return
+    end
     key, npc = FindNPC(MM.db.vendors, npcID, name, zone, IsClassicSeed)
     if npc then
         MM.db.verifiedServices[key] = { name = name, mapID = mapID, x = x, y = y, t = now }
@@ -286,7 +312,7 @@ end
 
 local confirmEvents = CreateFrame("Frame")
 for _, event in ipairs({
-    "GOSSIP_SHOW", "TRAINER_SHOW", "TAXIMAP_OPENED", "BANKFRAME_OPENED", "AUCTION_HOUSE_SHOW",
+    "GOSSIP_SHOW", "TRAINER_SHOW", "TRAINER_UPDATE", "TAXIMAP_OPENED", "BANKFRAME_OPENED", "AUCTION_HOUSE_SHOW",
     "PET_STABLE_SHOW", "BATTLEFIELDS_SHOW", "GUILD_REGISTRAR_SHOW", "MERCHANT_SHOW",
     "PLAYER_INTERACTION_MANAGER_FRAME_SHOW", "TRANSMOGRIFY_OPEN",
 }) do
