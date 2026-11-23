@@ -39,7 +39,7 @@ function MM:ExportData()
                 local item = db.items[itemID]
                 local offer = item and item.vendors[key]
                 if offer and not offer.classic and not offer.shipped then
-                    stock[itemID] = { NZ(offer.price), offer.cost, offer.limited, offer.pvp }
+                    stock[itemID] = { NZ(offer.price), offer.cost, offer.limited, offer.pvp, offer.rep }
                     data.items[itemID] = data.items[itemID] or { item.name, NZ(item.icon) }
                 end
             end
@@ -101,7 +101,7 @@ local function ImportVendor(db, key, rec, items)
             if item.name then db.items[itemID] = item end
         end
         if item.name then
-            item.vendors[key] = { price = offer[1] or 0, cost = offer[2], limited = offer[3], pvp = offer[4] }
+            item.vendors[key] = { price = offer[1] or 0, cost = offer[2], limited = offer[3], pvp = offer[4], rep = offer[5] }
             vendor.items[itemID] = true
             MM:QueueAutoCategorize(itemID)
         end

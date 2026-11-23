@@ -47,4 +47,13 @@ events:SetScript("OnEvent", function()
         end,
     })
     DBIcon:Register(addonName, launcher, MM.db.minimapButton)
+
+    -- On Classic-style clients LibDBIcon pins the icon a bit up and left of the round border's middle,
+    -- which shows on this icon's framed art. Centered on the ring instead.
+    local button = DBIcon.GetMinimapButton and DBIcon:GetMinimapButton(addonName)
+    local icon = button and button.icon
+    if icon and icon:GetPoint() == "TOPLEFT" then
+        icon:ClearAllPoints()
+        icon:SetPoint("CENTER", button, "TOPLEFT", 16.5, -16)
+    end
 end)

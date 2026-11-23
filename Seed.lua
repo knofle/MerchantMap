@@ -444,7 +444,7 @@ local function SeedShipped(db)
                         }
                         db.items[itemID] = item
                     end
-                    item.vendors[key] = { price = offer[1], cost = offer[2], limited = offer[3], pvp = offer[4], shipped = true }
+                    item.vendors[key] = { price = offer[1], cost = offer[2], limited = offer[3], pvp = offer[4], rep = offer[5], shipped = true }
                     vendor.items[itemID] = true
                     MM:QueueAutoCategorize(itemID)
                 end

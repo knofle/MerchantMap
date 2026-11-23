@@ -80,6 +80,73 @@ local function ExtendedCost(i)
     return #parts > 0 and table.concat(parts, " ") or nil, pvp
 end
 
+-- Reputation the vendor wants before selling it. It's on the merchant's tooltip only, not the item's.
+local REP_LINE = "^" .. (ITEM_REQ_REPUTATION or "Requires %s - %s"):gsub("[%^%$%(%)%.%[%]%*%+%-%?]", "%%%0"):gsub("%%s", "(.+)") .. "$"
+
+local function FactionName(factionID)
+    if C_Reputation and C_Reputation.GetFactionDataByID then
+        local data = C_Reputation.GetFactionDataByID(factionID)
+        return data and data.name
+    elseif GetFactionInfoByID then
+        return (GetFactionInfoByID(factionID))
+    end
+end
+
+-- Faction IDs by name, from the shipped data and your reputation list, so scans can be shipped per item
+local factionIDs
+local function FactionID(name, retried)
+    if factionIDs and not factionIDs[name] and not retried then
+        -- Built before you met this faction: look again
+        factionIDs = nil
+        return FactionID(name, true)
+    end
+    if not factionIDs then
+        factionIDs = {}
+        local function Add(id) local n = id and FactionName(id) if n then factionIDs[n] = id end end
+        for _, rep in pairs(MM.repItems or {}) do Add(rep[1]) Add(rep[3]) end
+        for _, rep in pairs(MM.shippedRepItems or {}) do Add(rep[1]) Add(rep[3]) end
+        for i = 1, (C_Reputation and C_Reputation.GetNumFactions and C_Reputation.GetNumFactions()) or 0 do
+            local data = C_Reputation.GetFactionDataByIndex(i)
+            if data and data.factionID and data.name then factionIDs[data.name] = data.factionID end
+        end
+    end
+    return factionIDs[name]
+end
+
+local function StandingID(name)
+    name = strlower(name)
+    for n = 1, 8 do
+        local label, female = _G["FACTION_STANDING_LABEL" .. n], _G["FACTION_STANDING_LABEL" .. n .. "_FEMALE"]
+        if (label and strlower(label) == name) or (female and strlower(female) == name) then return n end
+    end
+end
+
+-- Camp vendors (like Jim'bek, or the Redridge camp) name no faction: "Requires Honored with this faction".
+-- It's your side's camp faction.
+local CAMP_LINE = "^requires (%a+) with this faction"
+local CAMP_ALLIANCE, CAMP_HORDE = 2586, 2587 -- Azeroth Commerce Authority, Durotar Supply and Logistics
+
+-- Returns the line, and the faction ID and standing when they can be told
+local function RepRequired(i)
+    local data = C_TooltipInfo and C_TooltipInfo.GetMerchantItem and C_TooltipInfo.GetMerchantItem(i)
+    for _, line in ipairs(data and data.lines or {}) do
+        local text = line.leftText
+        if text and not (issecretvalue and issecretvalue(text)) then
+            local faction, standing = text:match(REP_LINE)
+            if faction then return text, FactionID(faction), StandingID(standing) end
+            standing = strlower(text):match(CAMP_LINE)
+            local standingID = standing and StandingID(standing)
+            if standingID then
+                local campID = UnitFactionGroup("player") == "Horde" and CAMP_HORDE or CAMP_ALLIANCE
+                local camp = FactionName(campID)
+                -- Written out with the faction's name, as it's shown away from the vendor too
+                if camp then text = (ITEM_REQ_REPUTATION or "Requires %s - %s"):format(camp, _G["FACTION_STANDING_LABEL" .. standingID]) end
+                return text, campID, standingID
+            end
+        end
+    end
+end
+
 local function ZoneOf(mapID)
     local info = mapID and C_Map.GetMapInfo(mapID)
     while info and info.mapType > Enum.UIMapType.Zone and info.parentMapID and info.parentMapID ~= 0 do
@@ -239,7 +306,7 @@ function MM:ScanMerchant()
     end
 
     -- Items you can't see (class, race, rank, sold out) are kept: only what you see is updated
-    local seen, complete = {}, true
+    local seen, complete, filed = {}, true, false
     for i = 1, GetMerchantNumItems() do
         local itemID = GetMerchantItemID(i)
         local name, icon, price, numAvailable, hasCost = MerchantItem(i)
@@ -251,21 +318,27 @@ function MM:ScanMerchant()
             item.quality = item.quality or C_Item.GetItemQualityByID(itemID)
             local cost, pvp
             if hasCost then cost, pvp = ExtendedCost(i) end
+            local rep, repFaction, repStanding = RepRequired(i)
             item.vendors[key] = {
                 price = BasePrice(price, discount),
                 cost = cost,
                 pvp = pvp or nil,
                 limited = (numAvailable and numAvailable >= 0) or nil,
+                rep = rep,
+                repFaction = repStanding and repFaction,
+                repStanding = repFaction and repStanding,
             }
             vendor.items[itemID] = true
             seen[itemID] = true
             MM:QueueAutoCategorize(itemID)
+            if rep and MM:FileReputation(itemID) then filed = true end
         else
             complete = false
         end
     end
 
     if oldFilter then SetMerchantFilter(oldFilter) end
+    if filed then self:OnCategoriesChanged() end
     if complete then MarkNotSeen(key, vendor, seen) end
 
     scanIncomplete = not complete
@@ -304,6 +377,53 @@ function MM:PriceText(offer)
     text = text or "Free"
     if offer.limited then text = text .. " |cffff8040(limited)|r" end
     return text
+end
+
+-- Whether you're at the standing yet
+local function HasStanding(factionID, standing)
+    if not (factionID and standing) then return false end
+    local reaction
+    if C_Reputation and C_Reputation.GetFactionDataByID then
+        local data = C_Reputation.GetFactionDataByID(factionID)
+        reaction = data and data.reaction
+    elseif GetFactionInfoByID then
+        reaction = select(3, GetFactionInfoByID(factionID))
+    end
+    return reaction ~= nil and reaction >= standing
+end
+
+-- What the vendor showed when scanned, else what was seen in game for the item, else the Classic data.
+-- Also returns whether you have the standing already.
+function MM:RepText(itemID, offer)
+    if offer.rep then
+        local factionID, standing = offer.repFaction, offer.repStanding
+        if not factionID then
+            -- Scanned before the faction was saved too
+            local name, label = offer.rep:match(REP_LINE)
+            factionID, standing = name and FactionID(name), label and StandingID(label)
+        end
+        return offer.rep, HasStanding(factionID, standing)
+    end
+    local rep = (self.shippedRepItems and self.shippedRepItems[itemID]) or (self.repItems and self.repItems[itemID])
+    if not rep then return end
+    -- Camp factions (like for Merchant's Favor recipes): each side's own
+    local factionID = rep[3] and UnitFactionGroup("player") == "Horde" and rep[3] or rep[1]
+    local faction = FactionName(factionID)
+    local standing = _G["FACTION_STANDING_LABEL" .. rep[2]]
+    if faction and standing then
+        return (ITEM_REQ_REPUTATION or "Requires %s - %s"):format(faction, standing), HasStanding(factionID, rep[2])
+    end
+end
+
+-- The faction an item needs standing with at any of its vendors, for the Reputation categories
+function MM:RepFaction(itemID)
+    local item = self.db.items[itemID]
+    for _, offer in pairs(item and item.vendors or {}) do
+        local faction = offer.rep and offer.rep:match(REP_LINE)
+        if faction then return faction end
+    end
+    local rep = (self.shippedRepItems and self.shippedRepItems[itemID]) or (self.repItems and self.repItems[itemID])
+    return rep and FactionName(rep[3] and UnitFactionGroup("player") == "Horde" and rep[3] or rep[1])
 end
 
 function MM:LocationText(vendor)

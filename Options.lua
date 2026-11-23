@@ -370,12 +370,19 @@ Check("Minimap button", "Opens Merchant Map",
     function() return not (MM.db.minimapButton and MM.db.minimapButton.hide) end,
     function(on) MM:SetMinimapButtonShown(on) end)
 
-Check("Reagent buttons", "Search reagents from professions",
+local reagentCheck = Check("Reagent buttons", "Search reagents from professions",
     function() return MM.db.tradeSkillButtons end,
     function(on)
         MM.db.tradeSkillButtons = on or nil
         MM:RefreshTradeSkillButtons()
     end)
+MM.W.SetTooltip(reagentCheck, "Adds a small search button beside each reagent in the profession window "
+    .. "that Merchant Map knows a vendor for. Click it to search for that reagent and see where to buy it.")
+
+local reagentWindowCheck = Check("Open MM window from reagent buttons", "",
+    function() return MM.db.reagentWindow end,
+    function(on) MM.db.reagentWindow = on or nil end)
+MM.W.SetTooltip(reagentWindowCheck, "The search buttons in the profession UI open the Merchant Map window.")
 
 Section("Map")
 
@@ -400,6 +407,14 @@ local UpdateTooltipDropdown = Dropdown("Tooltip position", {
     { "top", "Top" }, { "left", "Left" }, { "right", "Right" }, { "below", "Below" }, { "mouse", "Mouse" },
 }, function() return MM.db.tooltipAnchor or "below" end,
    function(value) MM.db.tooltipAnchor = value ~= "below" and value or nil end)
+
+Check("Vendors in tooltips", "With reputation needed",
+    function() return not MM.db.hideTooltipVendors end,
+    function(on) MM.db.hideTooltipVendors = not on or nil end)
+
+Check("Categories in tooltips", "",
+    function() return MM.db.showTooltipCats end,
+    function(on) MM.db.showTooltipCats = on or nil end)
 local leftBottom = NextColumn(top)
 Section("Direction arrow")
 local arrowTop = y

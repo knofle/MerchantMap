@@ -130,6 +130,14 @@ for i = 1, STOCK_ROWS do
         GameTooltip:SetOwner(stock, "ANCHOR_NONE")
         GameTooltip:SetPoint("TOPLEFT", stock, "TOPRIGHT", 4, 0)
         GameTooltip:SetItemByID(self.itemID)
+        local item = MM.db.items[self.itemID]
+        local offer = item and item.vendors[stockKey]
+        local rep, met
+        if offer then rep, met = MM:RepText(self.itemID, offer) end
+        if rep then
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine(rep, 1, met and 1 or 0.4, met and 1 or 0.4)
+        end
         GameTooltip:Show()
     end)
     row:SetScript("OnLeave", GameTooltip_Hide)

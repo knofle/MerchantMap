@@ -142,6 +142,12 @@ local function Classify(itemID)
             end
         end
     end
+    -- Most vendors ask for the standing themselves, so the item's tooltip doesn't say
+    local repFaction = MM:RepFaction(itemID)
+    if repFaction and not PVP_FACTIONS[repFaction] then
+        MM.db.repFiled[itemID] = true
+        if not tContains(paths, "Reputation/" .. repFaction) then Add("Reputation/" .. repFaction) end
+    end
     -- Recipe tooltips embed the crafted item, so skip the item rules
     if classID == CLASS.Recipe then
         Add(subclassID == 0 and "Class Supplies/Books" or ("Professions/" .. subType .. "/Recipes"))
@@ -281,6 +287,19 @@ function MM:QueueAutoCategorize(itemID)
     if not ticker then ticker = C_Timer.NewTicker(INTERVAL, Process) end
 end
 
+-- Sorted before its reputation was known (at login, or a scan that just found it): added to
+-- Reputation once, so removing it sticks. Returns true when it was added.
+function MM:FileReputation(itemID)
+    local db = self.db
+    if not db.autoDone[itemID] or db.repFiled[itemID] then return end
+    local faction = self:RepFaction(itemID)
+    if faction and not PVP_FACTIONS[faction] then
+        db.repFiled[itemID] = true
+        self:AssignItem(itemID, self:AddCategory("Reputation/" .. faction))
+        return true
+    end
+end
+
 -- Re-runs the classifier for items that are in no category
 function MM:AutoCategorizeUncategorized()
     local count = 0
@@ -299,6 +318,7 @@ events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function()
     local db = MM.db
     db.overridden = db.overridden or {}
+    db.repFiled = db.repFiled or {}
     -- Food and drink read before its "Use:" text had loaded went to Consumables/Other: sorted again once
     if not db.recheckedOther then
         db.recheckedOther = true
@@ -320,6 +340,7 @@ events:SetScript("OnEvent", function()
             end
             db.autoDone[itemID] = true
         end
+        MM:FileReputation(itemID)
         MM:QueueAutoCategorize(itemID)
     end
 end)

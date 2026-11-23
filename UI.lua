@@ -1445,14 +1445,24 @@ local function Row_OnEnter(self)
             where[key] = MM:LocationText(vendor)
         end
     end
-    GameTooltip:AddLine(" ")
-    GameTooltip:AddLine(#keys == 1 and "Only sold by:" or "Sold by:", ACCENT[1], ACCENT[2], ACCENT[3])
     -- Vendors that didn't have it in stock at the last visit go together at the bottom
     table.sort(keys, function(a, b)
         local lateA, lateB = item.vendors[a].notSeen or false, item.vendors[b].notSeen or false
         if lateA ~= lateB then return lateB end
         return where[a] < where[b]
     end)
+    -- Every vendor asks the same standing, so it's shown once
+    local rep, met
+    for _, key in ipairs(keys) do
+        rep, met = MM:RepText(self.itemID, item.vendors[key])
+        if rep then break end
+    end
+    if MM.db.hideTooltipVendors then keys = {} end
+    if #keys > 0 then
+        GameTooltip:AddLine(" ")
+        if rep then GameTooltip:AddLine(rep, 1, met and 1 or 0.4, met and 1 or 0.4) end
+        GameTooltip:AddLine(#keys == 1 and "Only sold by:" or "Sold by:", ACCENT[1], ACCENT[2], ACCENT[3])
+    end
     local lateShown
     for i, key in ipairs(keys) do
         if i > MAX_TOOLTIP_VENDORS then
@@ -1475,7 +1485,7 @@ local function Row_OnEnter(self)
     end
 
     local set = MM.db.itemCats[self.itemID]
-    if set then
+    if set and MM.db.showTooltipCats then
         GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Categories:", ACCENT[1], ACCENT[2], ACCENT[3])
         for _, path in ipairs(SortedPaths(set)) do

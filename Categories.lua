@@ -102,7 +102,7 @@ end
 function MM:ResetCategories()
     local db = self.db
     db.categories, db.userCategories = nil, nil
-    db.itemCats, db.collapsed, db.autoDone, db.overridden = {}, {}, {}, {}
+    db.itemCats, db.collapsed, db.autoDone, db.overridden, db.repFiled = {}, {}, {}, {}, {}
     self:InitCategories()
     for itemID in pairs(db.items) do self:QueueAutoCategorize(itemID) end
     self:ResetFreshMarks()

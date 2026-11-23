@@ -1,5 +1,14 @@
 # Merchant Map
 
+## 1.2.4
+
+- Vendor-Tron 1000 and Super-Seller 680 in Desolace now say they travel with a caravan and are only at their spot while it stops there.
+- Item tooltips now show when a vendor wants a reputation standing before selling it to you, like the Timbermaw, Argent Dawn and Cenarion Circle items and the Merchant's Favor recipes. Other vendors' requirements are recorded when you open them. These items are now also listed under Reputation.
+- New tooltip options: the vendors (with the reputation needed) can be turned off, and the categories are now off unless you turn them on.
+- The reagent search buttons in the profession window now target and mark the closest vendor, like clicking an item in the window. They only open the window if you turn that on in the options, and no longer show for reagents only sold in limited stock, like Rugged Leather.
+- The minimap button's icon is now centered in its round border.
+- Updated vendor data: added 17 vendors that are neutral to both factions, among them the Timbermaw vendors Meilosh, Gorn One Eye and Ur'dan, the Gelkis and Magram quartermasters in Desolace, and the vendors in Alterac Mountains.
+
 ## 1.2.3
 
 - While a patrolling vendor is your marked vendor, their route now stays on the world map and also shows on the minimap.
@@ -30,8 +39,4 @@
 
 - The window's title now shows the version number.
 - Fixed a Lua error when resizing the window with the mouse over an item.
-
-## 1.1.12
-
-- Updated vendor data: 35 more vendors and 47 more trainers and other service NPCs checked in game, the new Darkspear Islands battlemasters, and corrected positions for several vendors and battlemasters.
 
